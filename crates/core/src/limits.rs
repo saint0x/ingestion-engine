@@ -9,6 +9,15 @@
 //! - Sustained throughput: 100MB/sec
 //! - 1MB batch limit → ~1000 events/batch → 100 batches/sec
 //! - Memory per batch: 1MB × concurrent_requests = predictable working set
+//!
+//! # Usage Note
+//!
+//! Constants used at runtime: `MAX_BATCH_SIZE_BYTES`, `MAX_EVENT_SIZE_BYTES`,
+//! `MAX_CUSTOM_PROPERTIES_BYTES`, `MAX_FUTURE_SKEW_SECS`, `MAX_EVENT_AGE_HOURS`.
+//!
+//! Other constants are exported for downstream crates and documentation.
+//! The `#[validate]` derive macro requires literal values in attributes,
+//! so field limits are duplicated there. Keep both in sync when modifying.
 
 // === Batch Limits ===
 

@@ -3,18 +3,20 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 /// Session timeout duration (30 minutes of inactivity).
 pub const SESSION_TIMEOUT_MINUTES: i64 = 30;
 
 /// A user session for event correlation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct Session {
     /// Unique session ID
     pub id: Uuid,
     /// Associated tenant
     pub tenant_id: Uuid,
-    /// Optional user ID
+    /// Optional user ID (max 128 chars, same as Event.user_id)
+    #[validate(length(max = 128))]
     pub user_id: Option<String>,
     /// Session start time
     pub started_at: DateTime<Utc>,

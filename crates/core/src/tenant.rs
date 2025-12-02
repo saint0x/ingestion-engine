@@ -23,13 +23,15 @@ pub struct Tenant {
 }
 
 /// API key for authentication.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct ApiKey {
-    /// The API key value (hashed in storage)
+    /// The API key value (hashed in storage, SHA-256 = 64 hex chars)
+    #[validate(length(max = 128))]
     pub key_hash: String,
     /// Associated tenant ID
     pub tenant_id: Uuid,
     /// Human-readable name
+    #[validate(length(min = 1, max = 200))]
     pub name: String,
     /// Whether the key is active
     pub active: bool,
@@ -56,8 +58,10 @@ impl Tenant {
 }
 
 /// Validated tenant context extracted from request.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Validate)]
 pub struct TenantContext {
+    #[validate(nested)]
     pub tenant: Tenant,
+    #[validate(length(max = 200))]
     pub api_key_name: String,
 }

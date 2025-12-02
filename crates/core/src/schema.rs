@@ -4,7 +4,9 @@ use chrono::Duration;
 
 use crate::error::{Error, Result};
 use crate::events::{Event, EventBatch, EventPayload};
-use crate::limits::{MAX_BATCH_SIZE_BYTES, MAX_EVENT_AGE_HOURS, MAX_FUTURE_SKEW_SECS};
+use crate::limits::{
+    MAX_BATCH_SIZE_BYTES, MAX_EVENT_AGE_HOURS, MAX_EVENT_SIZE_BYTES, MAX_FUTURE_SKEW_SECS,
+};
 use validator::Validate;
 
 /// Validates raw batch size BEFORE deserialization.
@@ -16,6 +18,20 @@ pub fn validate_batch_size(raw_bytes: &[u8]) -> Result<()> {
             "batch {}KB exceeds {}KB limit",
             raw_bytes.len() / 1024,
             MAX_BATCH_SIZE_BYTES / 1024
+        )));
+    }
+    Ok(())
+}
+
+/// Validates a single serialized event size.
+///
+/// Use this to reject oversized events before deserialization.
+pub fn validate_event_size(raw_bytes: &[u8]) -> Result<()> {
+    if raw_bytes.len() > MAX_EVENT_SIZE_BYTES {
+        return Err(Error::validation(format!(
+            "event {}KB exceeds {}KB limit",
+            raw_bytes.len() / 1024,
+            MAX_EVENT_SIZE_BYTES / 1024
         )));
     }
     Ok(())

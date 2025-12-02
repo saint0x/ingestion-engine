@@ -2,15 +2,17 @@
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 use crate::retention::RetentionTier;
 
 /// A tenant/project in the system.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct Tenant {
     /// Unique tenant ID
     pub id: Uuid,
     /// Display name
+    #[validate(length(min = 1, max = 200))]
     pub name: String,
     /// Retention tier
     pub tier: RetentionTier,

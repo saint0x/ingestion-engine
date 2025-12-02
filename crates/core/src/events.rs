@@ -3,7 +3,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use validator::Validate;
+use validator::{Validate, ValidationError};
+
+use crate::limits::MAX_CUSTOM_PROPERTIES_BYTES;
 
 /// Coordinates for click events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,21 +15,28 @@ pub struct Coordinates {
 }
 
 /// Performance metrics for web vitals.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct PerformanceMetrics {
     /// Largest Contentful Paint (ms)
+    #[validate(range(min = 0.0, max = 60000.0))]
     pub lcp: Option<f64>,
     /// First Input Delay (ms)
+    #[validate(range(min = 0.0, max = 10000.0))]
     pub fid: Option<f64>,
     /// Cumulative Layout Shift
+    #[validate(range(min = 0.0, max = 10.0))]
     pub cls: Option<f64>,
     /// Time to First Byte (ms)
+    #[validate(range(min = 0.0, max = 60000.0))]
     pub ttfb: Option<f64>,
     /// DOM Content Loaded (ms)
+    #[validate(range(min = 0.0, max = 120000.0))]
     pub dom_content_loaded: Option<f64>,
     /// Load Complete (ms)
+    #[validate(range(min = 0.0, max = 300000.0))]
     pub load_complete: Option<f64>,
     /// Resource count
+    #[validate(range(max = 10000))]
     pub resource_count: Option<u32>,
     /// Memory usage (bytes)
     pub memory_usage: Option<u64>,
@@ -53,6 +62,7 @@ pub struct PageviewData {
     /// Time to first byte (ms)
     pub time_to_first_byte: Option<f64>,
     /// Referrer URL
+    #[validate(length(max = 2048))]
     pub referrer: Option<String>,
 }
 
@@ -60,6 +70,7 @@ pub struct PageviewData {
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct ClickData {
     /// Element tag name
+    #[validate(length(max = 64))]
     pub element: String,
     /// CSS selector
     #[validate(length(max = 1000))]
@@ -83,6 +94,7 @@ pub struct ScrollData {
     /// Scroll direction
     pub direction: ScrollDirection,
     /// Element being scrolled (if not document)
+    #[validate(length(max = 256))]
     pub element: Option<String>,
 }
 
@@ -92,13 +104,38 @@ pub struct PerformanceData {
     pub metrics: PerformanceMetrics,
 }
 
+/// Validates custom properties JSON size.
+fn validate_properties_size(props: &serde_json::Value) -> Result<(), ValidationError> {
+    // Fast path: null/empty
+    if props.is_null() {
+        return Ok(());
+    }
+
+    let size = serde_json::to_vec(props).map(|v| v.len()).unwrap_or(0);
+
+    if size > MAX_CUSTOM_PROPERTIES_BYTES {
+        let mut err = ValidationError::new("properties_too_large");
+        err.message = Some(
+            format!(
+                "properties {}KB exceeds {}KB limit",
+                size / 1024,
+                MAX_CUSTOM_PROPERTIES_BYTES / 1024
+            )
+            .into(),
+        );
+        return Err(err);
+    }
+    Ok(())
+}
+
 /// Custom event data.
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct CustomData {
     /// Custom event type name
     #[validate(length(min = 1, max = 100))]
     pub event_name: String,
-    /// Arbitrary properties
+    /// Arbitrary properties (max 16KB)
+    #[validate(custom(function = "validate_properties_size"))]
     pub properties: serde_json::Value,
 }
 
@@ -147,6 +184,7 @@ pub struct Event {
     /// Session ID for ordering guarantees
     pub session_id: Uuid,
     /// Optional user ID
+    #[validate(length(max = 128))]
     pub user_id: Option<String>,
     /// Event timestamp
     pub timestamp: DateTime<Utc>,
@@ -161,11 +199,13 @@ pub struct Event {
 }
 
 /// Client-side metadata attached to events.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct EventMetadata {
     /// User agent string
+    #[validate(length(max = 512))]
     pub user_agent: Option<String>,
     /// Client IP (set by server)
+    #[validate(length(max = 45))]
     pub ip: Option<String>,
     /// Screen dimensions
     pub screen_width: Option<u32>,
@@ -176,8 +216,10 @@ pub struct EventMetadata {
     /// Device pixel ratio
     pub device_pixel_ratio: Option<f64>,
     /// Timezone
+    #[validate(length(max = 64))]
     pub timezone: Option<String>,
     /// Language
+    #[validate(length(max = 16))]
     pub language: Option<String>,
 }
 

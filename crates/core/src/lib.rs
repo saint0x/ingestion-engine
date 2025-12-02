@@ -2,6 +2,7 @@
 
 pub mod error;
 pub mod events;
+pub mod limits;
 pub mod retention;
 pub mod schema;
 pub mod session;

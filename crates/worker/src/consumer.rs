@@ -2,10 +2,12 @@
 //!
 //! This worker implements the core data pipeline:
 //! 1. Fetch batch of events from Redpanda
-//! 2. Insert batch to ClickHouse
-//! 3. Commit offset (at-least-once delivery)
-//! 4. Repeat
+//! 2. Enrich events (UA parsing)
+//! 3. Insert batch to ClickHouse
+//! 4. Commit offset (at-least-once delivery)
+//! 5. Repeat
 
+use crate::enrichment::EnrichmentWorker;
 use clickhouse_client::ClickHouseClient;
 use engine_core::Result;
 use redpanda::Consumer;
@@ -39,6 +41,7 @@ pub struct ConsumerWorker {
     consumer: Arc<Consumer>,
     clickhouse: Arc<ClickHouseClient>,
     config: ConsumerWorkerConfig,
+    enrichment: EnrichmentWorker,
 }
 
 impl ConsumerWorker {
@@ -51,6 +54,7 @@ impl ConsumerWorker {
             consumer,
             clickhouse,
             config: ConsumerWorkerConfig::default(),
+            enrichment: EnrichmentWorker::new(),
         }
     }
 
@@ -64,6 +68,7 @@ impl ConsumerWorker {
             consumer,
             clickhouse,
             config,
+            enrichment: EnrichmentWorker::new(),
         }
     }
 
@@ -149,10 +154,16 @@ impl ConsumerWorker {
     }
 
     /// Inserts events with retry logic.
+    ///
+    /// Events are enriched (UA parsing) before insertion.
     async fn insert_with_retry(
         &self,
         events: Vec<engine_core::ClickHouseEvent>,
     ) -> Result<usize> {
+        // Enrich events before insertion
+        let mut events = events;
+        self.enrichment.enrich_batch(&mut events);
+
         let mut last_error = None;
 
         for attempt in 0..=self.config.max_retries {

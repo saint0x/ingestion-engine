@@ -17,4 +17,5 @@ pub mod retention;
 pub mod scheduler;
 
 pub use consumer::*;
+pub use enrichment::EnrichmentWorker;
 pub use scheduler::*;

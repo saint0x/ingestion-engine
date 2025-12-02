@@ -13,6 +13,8 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 
+woothee = "0.13"
+
 engine-core = { workspace = true }
 clickhouse-client = { workspace = true }
 redpanda = { workspace = true }

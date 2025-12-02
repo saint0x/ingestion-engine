@@ -1,0 +1,18 @@
+host = "0.0.0.0"
+port = 8080
+
+[redpanda]
+brokers = ["localhost:9092"]
+batch_size = 1000
+batch_timeout_ms = 100
+compression = "lz4"
+request_timeout_ms = 30000
+retries = 3
+retry_backoff_ms = 100
+acks = "all"
+
+[clickhouse]
+url = "http://localhost:8123"
+database = "overwatch"
+pool_size = 10
+timeout_secs = 30

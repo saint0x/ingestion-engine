@@ -1,0 +1,19 @@
+[package]
+name = "redpanda"
+version = "1.0.0"
+edition = "2021"
+description = "Redpanda producer with batching for the ingestion engine"
+
+[dependencies]
+rskafka = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+parking_lot = { workspace = true }
+
+engine-core = { workspace = true }
+telemetry = { workspace = true }

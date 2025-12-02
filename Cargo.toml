@@ -1,0 +1,85 @@
+[package]
+name = "ingestion-engine"
+version = "1.0.0"
+edition = "2021"
+description = "High-throughput analytics ingestion engine for Overwatch"
+license = "MIT"
+
+[workspace]
+members = [
+    "crates/core",
+    "crates/api",
+    "crates/redpanda",
+    "crates/clickhouse",
+    "crates/worker",
+    "crates/telemetry",
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Web framework
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "compression-gzip", "trace"] }
+
+# Redpanda (Kafka-compatible) - pure Rust client, no native deps
+rskafka = "0.5"
+
+# ClickHouse
+clickhouse = { version = "0.12", features = ["native-tls"] }
+
+# Validation
+validator = { version = "0.18", features = ["derive"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Tracing (structured logging only, no external deps)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Utils
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+config = "0.14"
+dotenvy = "0.15"
+parking_lot = "0.12"
+time = "0.3"
+
+# Internal crates
+engine-core = { path = "crates/core" }
+api = { path = "crates/api" }
+redpanda = { path = "crates/redpanda" }
+clickhouse-client = { path = "crates/clickhouse" }
+worker = { path = "crates/worker" }
+telemetry = { path = "crates/telemetry" }
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+config = { workspace = true }
+dotenvy = { workspace = true }
+axum = { workspace = true }
+
+engine-core = { workspace = true }
+api = { workspace = true }
+redpanda = { workspace = true }
+clickhouse-client = { workspace = true }
+worker = { workspace = true }
+telemetry = { workspace = true }
+
+[[bin]]
+name = "ingestion-engine"
+path = "src/main.rs"

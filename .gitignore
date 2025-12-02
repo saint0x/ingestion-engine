@@ -1,0 +1,38 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+
+# Cargo lock for libraries (keep for binaries)
+# Cargo.lock
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Debug
+debug/
+
+# Coverage
+*.profraw
+coverage/
+lcov.info
+
+# Backup files
+*.bak
+*.orig
+
+# OS files
+Thumbs.db

@@ -3,7 +3,6 @@
 use crate::config::ClickHouseConfig;
 use clickhouse::Client;
 use engine_core::Result;
-use std::sync::Arc;
 use tracing::info;
 
 /// ClickHouse client wrapper with connection pooling.

@@ -2559,6 +2559,7 @@ dependencies = [
  "chrono",
  "clickhouse-client",
  "engine-core",
+ "redpanda",
  "serde",
  "serde_json",
  "telemetry",

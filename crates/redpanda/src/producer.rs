@@ -26,7 +26,6 @@ pub struct SendResult {
 
 /// High-throughput producer with batching.
 pub struct Producer {
-    brokers: Vec<String>,
     accumulator: Arc<BatchAccumulator>,
     config: RedpandaConfig,
     partition_strategy: PartitionStrategy,
@@ -43,7 +42,6 @@ impl Producer {
         };
 
         Ok(Self {
-            brokers: config.brokers.clone(),
             accumulator: Arc::new(BatchAccumulator::new(batch_config)),
             config,
             partition_strategy: PartitionStrategy::BySession,
@@ -237,7 +235,7 @@ impl Producer {
             );
 
             let payload = serde_json::to_vec(&event)
-                .map_err(|e| engine_core::Error::Serialization(e))?;
+                .map_err(engine_core::Error::Serialization)?;
 
             records.push(Record {
                 key: key.map(|k| k.into_bytes()),

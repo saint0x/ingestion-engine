@@ -7,6 +7,7 @@ use tracing::{debug, info};
 
 /// Worker that compresses old data for free tier tenants.
 pub struct CompressionWorker {
+    #[allow(dead_code)] // Will be used when compression queries are implemented
     clickhouse: Arc<ClickHouseClient>,
 }
 
@@ -29,7 +30,7 @@ impl CompressionWorker {
         // 4. Delete the raw events
 
         // Placeholder query - in production would use proper aggregation
-        let compress_query = format!(
+        let _compress_query = format!(
             r#"
             -- Compression placeholder
             -- Would aggregate events older than {} hours for free tier

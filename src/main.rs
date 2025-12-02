@@ -15,7 +15,7 @@ use tracing::{error, info};
 
 use api::{router, AppState};
 use clickhouse_client::{ClickHouseClient, ClickHouseConfig};
-use redpanda::{Producer, RedpandaConfig};
+use redpanda::{Consumer, Producer, RedpandaConfig};
 use telemetry::{health, init_tracing_from_env};
 use worker::{WorkerConfig, WorkerScheduler};
 
@@ -101,10 +101,21 @@ async fn main() -> Result<()> {
     // Check health and update status
     check_health(&config, &clickhouse).await;
 
-    // Start background workers
-    let worker_scheduler = Arc::new(WorkerScheduler::new(
+    // Initialize Redpanda consumer for the pipeline
+    let consumer = Arc::new(
+        Consumer::new(
+            config.redpanda.consumer.clone(),
+            config.redpanda.brokers.clone(),
+        )
+        .await
+        .context("Failed to create Redpanda consumer")?,
+    );
+
+    // Start background workers with consumer
+    let worker_scheduler = Arc::new(WorkerScheduler::with_consumer(
         WorkerConfig::default(),
         clickhouse.clone(),
+        consumer.clone(),
     ));
     let _worker_handles = worker_scheduler.start();
 

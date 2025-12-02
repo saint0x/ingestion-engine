@@ -7,6 +7,7 @@ use tracing::{debug, info, warn};
 
 /// Worker that enforces retention policies.
 pub struct RetentionWorker {
+    #[allow(dead_code)] // Will be used when retention queries are implemented
     clickhouse: Arc<ClickHouseClient>,
 }
 

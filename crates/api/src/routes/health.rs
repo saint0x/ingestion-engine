@@ -7,7 +7,7 @@ use crate::response::HealthResponse;
 use crate::state::AppState;
 
 /// GET /health - Full health check.
-pub async fn health_handler(State(state): State<AppState>) -> Json<HealthResponse> {
+pub async fn health_handler(State(_state): State<AppState>) -> Json<HealthResponse> {
     let report = health().report();
 
     Json(HealthResponse {

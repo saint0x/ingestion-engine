@@ -3,11 +3,8 @@
 //! Collects metrics in-memory and periodically flushes to ClickHouse.
 
 use chrono::{DateTime, Utc};
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 /// A counter metric.
 #[derive(Debug, Default)]
@@ -138,10 +135,15 @@ pub struct Metrics {
     pub events_failed_validation: Counter,
     pub batches_received: Counter,
 
-    // Redpanda metrics
+    // Redpanda producer metrics
     pub batches_sent_to_redpanda: Counter,
     pub events_sent_to_redpanda: Counter,
     pub redpanda_send_errors: Counter,
+
+    // Redpanda consumer metrics
+    pub events_consumed: Counter,
+    pub consumer_errors: Counter,
+    pub events_inserted: Counter,
 
     // ClickHouse metrics
     pub clickhouse_inserts: Counter,
@@ -151,11 +153,13 @@ pub struct Metrics {
     pub ingest_latency_ms: Histogram,
     pub redpanda_latency_ms: Histogram,
     pub clickhouse_latency_ms: Histogram,
+    pub batch_insert_latency_ms: Histogram,
 
     // Gauges
     pub active_connections: Gauge,
     pub queue_depth: Gauge,
     pub backpressure_active: Gauge,
+    pub consumer_lag: Gauge,
 }
 
 impl Metrics {

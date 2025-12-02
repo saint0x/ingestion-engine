@@ -1,7 +1,7 @@
 //! Notification worker for admin alerts.
 
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::info;
 
 /// Notification types.
 #[derive(Debug, Clone, Serialize, Deserialize)]

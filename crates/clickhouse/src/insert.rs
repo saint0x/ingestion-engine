@@ -2,10 +2,10 @@
 
 use crate::client::ClickHouseClient;
 use clickhouse::Row;
-use engine_core::{Event, EventPayload, Result};
+use engine_core::{ClickHouseEvent, Event, EventPayload, Result};
+use serde::{Deserialize, Serialize};
 use telemetry::{metrics, MetricsSnapshot};
-use serde::Serialize;
-use tracing::{debug, error};
+use tracing::debug;
 
 /// Flattened event row for ClickHouse insertion.
 #[derive(Debug, Clone, Row, Serialize)]
@@ -172,7 +172,7 @@ impl From<Event> for EventRow {
     }
 }
 
-/// Insert events into ClickHouse.
+/// Insert events into ClickHouse (legacy format).
 pub async fn insert_events(client: &ClickHouseClient, events: Vec<Event>) -> Result<usize> {
     if events.is_empty() {
         return Ok(0);
@@ -202,6 +202,110 @@ pub async fn insert_events(client: &ClickHouseClient, events: Vec<Event>) -> Res
         count = count,
         latency_ms = %elapsed.as_millis(),
         "Inserted events to ClickHouse"
+    );
+
+    Ok(count)
+}
+
+/// Row for new ClickHouse events table (overwatch.events).
+///
+/// Maps to the production schema with project_id, LowCardinality fields,
+/// and JSON data blob for extensibility.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct ClickHouseEventRow {
+    pub event_id: String,
+    pub project_id: String,
+    pub session_id: String,
+    pub user_id: Option<String>,
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub timestamp: String, // DateTime64(3) as string
+    pub url: String,
+    pub path: String,
+    pub referrer: String,
+    pub user_agent: String,
+    pub device_type: String,
+    pub browser: String,
+    pub browser_version: String,
+    pub os: String,
+    pub country: String,
+    pub region: Option<String>,
+    pub city: Option<String>,
+    pub data: String, // JSON blob
+}
+
+impl From<ClickHouseEvent> for ClickHouseEventRow {
+    fn from(event: ClickHouseEvent) -> Self {
+        Self {
+            event_id: event.event_id,
+            project_id: event.project_id,
+            session_id: event.session_id,
+            user_id: event.user_id,
+            event_type: event.event_type,
+            timestamp: event.timestamp,
+            url: event.url,
+            path: event.path,
+            referrer: event.referrer,
+            user_agent: event.user_agent,
+            device_type: event.device_type,
+            browser: event.browser,
+            browser_version: event.browser_version,
+            os: event.os,
+            country: event.country,
+            region: event.region,
+            city: event.city,
+            data: event.data,
+        }
+    }
+}
+
+/// Insert ClickHouseEvent records from the consumer.
+///
+/// This is the main insert function for the production pipeline,
+/// inserting into the overwatch.events table.
+pub async fn insert_clickhouse_events(
+    client: &ClickHouseClient,
+    events: Vec<ClickHouseEvent>,
+) -> Result<usize> {
+    if events.is_empty() {
+        return Ok(0);
+    }
+
+    let count = events.len();
+    let start = std::time::Instant::now();
+
+    let rows: Vec<ClickHouseEventRow> = events.into_iter().map(ClickHouseEventRow::from).collect();
+
+    // Insert into overwatch.events table
+    let mut insert = client.inner().insert("overwatch.events")
+        .map_err(|e| {
+            metrics().clickhouse_insert_errors.inc();
+            engine_core::Error::internal(format!("Insert error: {}", e))
+        })?;
+
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| {
+                metrics().clickhouse_insert_errors.inc();
+                engine_core::Error::internal(format!("Write error: {}", e))
+            })?;
+    }
+
+    insert.end().await
+        .map_err(|e| {
+            metrics().clickhouse_insert_errors.inc();
+            engine_core::Error::internal(format!("End error: {}", e))
+        })?;
+
+    let elapsed = start.elapsed();
+    metrics().batch_insert_latency_ms.observe(elapsed.as_millis() as u64);
+    metrics().clickhouse_inserts.inc();
+    metrics().events_inserted.inc_by(count as u64);
+
+    debug!(
+        count = count,
+        latency_ms = %elapsed.as_millis(),
+        "Inserted ClickHouse events"
     );
 
     Ok(count)

@@ -1,6 +1,5 @@
 //! Tracing setup for structured logging.
 
-use tracing::Level;
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,

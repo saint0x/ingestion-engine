@@ -1,8 +1,6 @@
 //! Event enrichment worker.
 
 use engine_core::Event;
-use std::collections::HashMap;
-use tracing::debug;
 
 /// Enriches events with additional data.
 pub struct EnrichmentWorker {
@@ -33,8 +31,8 @@ impl EnrichmentWorker {
         // GeoIP enrichment
         if self.geoip_enabled {
             if let Some(ref meta) = event.metadata {
-                if let Some(ref ip) = meta.ip {
-                    // Would lookup IP in GeoIP database
+                if let Some(ref _ip) = meta.ip {
+                    // TODO: Lookup IP in GeoIP database
                     // event.metadata.country = Some("US".to_string());
                     result.geoip_enriched = true;
                 }
@@ -44,8 +42,8 @@ impl EnrichmentWorker {
         // User agent parsing
         if self.ua_parser_enabled {
             if let Some(ref meta) = event.metadata {
-                if let Some(ref ua) = meta.user_agent {
-                    // Would parse user agent string
+                if let Some(ref _ua) = meta.user_agent {
+                    // TODO: Parse user agent string
                     // event.metadata.browser = Some("Chrome".to_string());
                     result.ua_parsed = true;
                 }

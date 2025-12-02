@@ -6,8 +6,10 @@ use tokio::time::interval;
 use tracing::{error, info};
 
 use clickhouse_client::ClickHouseClient;
+use redpanda::Consumer;
 
 use crate::compression::CompressionWorker;
+use crate::consumer::ConsumerWorker;
 use crate::retention::RetentionWorker;
 
 /// Worker scheduler configuration.
@@ -35,16 +37,47 @@ impl Default for WorkerConfig {
 pub struct WorkerScheduler {
     config: WorkerConfig,
     clickhouse: Arc<ClickHouseClient>,
+    consumer: Option<Arc<Consumer>>,
 }
 
 impl WorkerScheduler {
     pub fn new(config: WorkerConfig, clickhouse: Arc<ClickHouseClient>) -> Self {
-        Self { config, clickhouse }
+        Self {
+            config,
+            clickhouse,
+            consumer: None,
+        }
+    }
+
+    /// Creates a new scheduler with a consumer for the Redpanda → ClickHouse pipeline.
+    pub fn with_consumer(
+        config: WorkerConfig,
+        clickhouse: Arc<ClickHouseClient>,
+        consumer: Arc<Consumer>,
+    ) -> Self {
+        Self {
+            config,
+            clickhouse,
+            consumer: Some(consumer),
+        }
     }
 
     /// Starts all background workers.
     pub fn start(self: Arc<Self>) -> Vec<tokio::task::JoinHandle<()>> {
         let mut handles = Vec::new();
+
+        // Consumer worker (Redpanda → ClickHouse)
+        if let Some(ref consumer) = self.consumer {
+            let consumer = consumer.clone();
+            let clickhouse = self.clickhouse.clone();
+            handles.push(tokio::spawn(async move {
+                let worker = ConsumerWorker::new(consumer, clickhouse);
+                if let Err(e) = worker.run().await {
+                    error!("Consumer worker fatal error: {}", e);
+                }
+            }));
+            info!("Consumer worker started");
+        }
 
         // Compression worker
         let scheduler = self.clone();

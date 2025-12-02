@@ -2,6 +2,58 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Consumer configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsumerConfig {
+    /// Consumer group ID
+    #[serde(default = "default_group_id")]
+    pub group_id: String,
+    /// Topic to consume from
+    #[serde(default = "default_topic")]
+    pub topic: String,
+    /// Batch size (number of events before processing)
+    #[serde(default = "default_consumer_batch_size")]
+    pub batch_size: usize,
+    /// Batch timeout in milliseconds
+    #[serde(default = "default_consumer_batch_timeout_ms")]
+    pub batch_timeout_ms: u64,
+    /// Session timeout in milliseconds
+    #[serde(default = "default_session_timeout_ms")]
+    pub session_timeout_ms: u64,
+    /// Whether to auto-commit offsets (false = manual commit)
+    #[serde(default)]
+    pub auto_commit: bool,
+}
+
+fn default_group_id() -> String {
+    "ingestion-engine".to_string()
+}
+
+fn default_consumer_batch_size() -> usize {
+    1000
+}
+
+fn default_consumer_batch_timeout_ms() -> u64 {
+    1000 // 1 second
+}
+
+fn default_session_timeout_ms() -> u64 {
+    30000 // 30 seconds
+}
+
+impl Default for ConsumerConfig {
+    fn default() -> Self {
+        Self {
+            group_id: default_group_id(),
+            topic: default_topic(),
+            batch_size: default_consumer_batch_size(),
+            batch_timeout_ms: default_consumer_batch_timeout_ms(),
+            session_timeout_ms: default_session_timeout_ms(),
+            auto_commit: false,
+        }
+    }
+}
+
 /// Redpanda producer configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedpandaConfig {
@@ -31,6 +83,9 @@ pub struct RedpandaConfig {
     /// Acks required (0, 1, -1/all)
     #[serde(default = "default_acks")]
     pub acks: String,
+    /// Consumer configuration
+    #[serde(default)]
+    pub consumer: ConsumerConfig,
 }
 
 fn default_topic() -> String {
@@ -77,6 +132,7 @@ impl Default for RedpandaConfig {
             retries: default_retries(),
             retry_backoff_ms: default_retry_backoff_ms(),
             acks: default_acks(),
+            consumer: ConsumerConfig::default(),
         }
     }
 }

@@ -2,7 +2,6 @@
 
 use crate::config::RedpandaConfig;
 use rskafka::client::ClientBuilder;
-use std::time::Duration;
 use tracing::{debug, error};
 
 /// Check Redpanda connection health.

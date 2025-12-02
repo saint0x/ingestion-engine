@@ -15,4 +15,5 @@ uuid = { workspace = true }
 
 engine-core = { workspace = true }
 clickhouse-client = { workspace = true }
+redpanda = { workspace = true }
 telemetry = { workspace = true }

@@ -6,6 +6,7 @@ use tracing::{debug, info};
 
 /// Worker that recomputes derived metrics.
 pub struct BackfillWorker {
+    #[allow(dead_code)] // Will be used when backfill queries are implemented
     clickhouse: Arc<ClickHouseClient>,
 }
 
@@ -45,8 +46,8 @@ impl BackfillWorker {
     }
 
     /// Recompute session data.
-    pub async fn recompute_sessions(&self, tenant_id: &str) -> Result<u64, String> {
-        // Would run session aggregation query
+    pub async fn recompute_sessions(&self, _tenant_id: &str) -> Result<u64, String> {
+        // Would run session aggregation query against self.clickhouse
         Ok(0)
     }
 }

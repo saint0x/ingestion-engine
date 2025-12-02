@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 pub struct RedpandaConfig {
     /// Broker addresses
     pub brokers: Vec<String>,
+    /// Default topic for processed events
+    #[serde(default = "default_topic")]
+    pub topic: String,
     /// Batch size (number of events)
     #[serde(default = "default_batch_size")]
     pub batch_size: usize,
@@ -28,6 +31,10 @@ pub struct RedpandaConfig {
     /// Acks required (0, 1, -1/all)
     #[serde(default = "default_acks")]
     pub acks: String,
+}
+
+fn default_topic() -> String {
+    "events".to_string()
 }
 
 fn default_batch_size() -> usize {
@@ -62,6 +69,7 @@ impl Default for RedpandaConfig {
     fn default() -> Self {
         Self {
             brokers: vec!["localhost:9092".to_string()],
+            topic: default_topic(),
             batch_size: default_batch_size(),
             batch_timeout_ms: default_batch_timeout_ms(),
             compression: default_compression(),

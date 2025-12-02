@@ -53,6 +53,8 @@ config = "0.14"
 dotenvy = "0.15"
 parking_lot = "0.12"
 time = "0.3"
+url = "2"
+regex = "1"
 
 # Internal crates
 engine-core = { path = "crates/core" }

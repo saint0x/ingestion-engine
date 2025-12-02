@@ -3,7 +3,7 @@
 use crate::batch::{BatchAccumulator, BatchConfig, EventBatch};
 use crate::config::RedpandaConfig;
 use crate::partitioner::{get_partition_key, PartitionStrategy};
-use engine_core::{Event, Result};
+use engine_core::{ClickHouseEvent, Event, Result};
 use telemetry::metrics;
 use rskafka::client::{
     partition::{Compression, UnknownTopicHandling},
@@ -124,6 +124,96 @@ impl Producer {
             events_sent: total_sent,
             errors,
         })
+    }
+
+    /// Sends ClickHouse events directly to Redpanda.
+    ///
+    /// This bypasses the batch accumulator and sends immediately,
+    /// serializing ClickHouseEvent to JSON.
+    pub async fn send_clickhouse_events(&self, events: Vec<ClickHouseEvent>) -> Result<SendResult> {
+        if events.is_empty() {
+            return Ok(SendResult {
+                events_sent: 0,
+                errors: Vec::new(),
+            });
+        }
+
+        let count = events.len();
+        let topic = &self.config.topic;
+        let start = std::time::Instant::now();
+
+        // Get partition client
+        let client = self.get_client(topic, 0).await?;
+
+        // Convert ClickHouse events to records
+        let mut records = Vec::with_capacity(count);
+        let mut errors = Vec::new();
+
+        for event in events {
+            let key = Some(format!("{}:{}", event.project_id, event.session_id));
+
+            match serde_json::to_vec(&event) {
+                Ok(payload) => {
+                    records.push(Record {
+                        key: key.map(|k| k.into_bytes()),
+                        value: Some(payload),
+                        headers: BTreeMap::new(),
+                        timestamp: Utc::now(),
+                    });
+                }
+                Err(e) => {
+                    errors.push(format!("Failed to serialize event {}: {}", event.event_id, e));
+                }
+            }
+        }
+
+        if records.is_empty() {
+            return Ok(SendResult {
+                events_sent: 0,
+                errors,
+            });
+        }
+
+        // Send records
+        let compression = match self.config.compression.as_str() {
+            "gzip" => Compression::Gzip,
+            "snappy" => Compression::Snappy,
+            "lz4" => Compression::Lz4,
+            "zstd" => Compression::Zstd,
+            _ => Compression::NoCompression,
+        };
+
+        match client.produce(records.clone(), compression).await {
+            Ok(_offsets) => {
+                let sent = records.len();
+                metrics().events_sent_to_redpanda.inc_by(sent as u64);
+
+                let elapsed = start.elapsed();
+                metrics().redpanda_latency_ms.observe(elapsed.as_millis() as u64);
+                metrics().batches_sent_to_redpanda.inc();
+
+                debug!(
+                    topic = %topic,
+                    count = sent,
+                    latency_ms = %elapsed.as_millis(),
+                    "Sent ClickHouse events to Redpanda"
+                );
+
+                Ok(SendResult {
+                    events_sent: sent,
+                    errors,
+                })
+            }
+            Err(e) => {
+                error!("Failed to send ClickHouse events to Redpanda: {}", e);
+                metrics().redpanda_send_errors.inc_by(records.len() as u64);
+                errors.push(format!("Failed to produce: {}", e));
+                Ok(SendResult {
+                    events_sent: 0,
+                    errors,
+                })
+            }
+        }
     }
 
     /// Flushes a batch to Redpanda.

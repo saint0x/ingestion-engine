@@ -1,76 +1,64 @@
 //! ClickHouse table schemas.
+//!
+//! Schema follows the production spec with:
+//! - project_id instead of tenant_id
+//! - LowCardinality for enum-like fields
+//! - DateTime64(3) for millisecond precision
+//! - JSON data blob for extensibility
 
 /// SQL for creating the events table.
+///
+/// This is the main events table that stores all analytics events
+/// after transformation from SDK format.
 pub const CREATE_EVENTS_TABLE: &str = r#"
-CREATE TABLE IF NOT EXISTS events (
-    id UUID,
-    tenant_id UUID,
-    session_id UUID,
+CREATE TABLE IF NOT EXISTS overwatch.events (
+    -- Core identifiers
+    event_id String,
+    project_id String,
+    session_id String,
     user_id Nullable(String),
-    event_type LowCardinality(String),
+
+    -- Event classification
+    type LowCardinality(String),
     timestamp DateTime64(3),
-    received_at DateTime64(3),
 
-    -- Pageview fields
-    page_title Nullable(String),
-    page_path Nullable(String),
-    load_time Nullable(Float64),
-    time_to_first_byte Nullable(Float64),
-    referrer Nullable(String),
+    -- Page information
+    url String,
+    path String,
+    referrer String,
 
-    -- Click fields
-    click_element Nullable(String),
-    click_selector Nullable(String),
-    click_x Nullable(Float64),
-    click_y Nullable(Float64),
-    is_double_click Nullable(UInt8),
-    click_text Nullable(String),
+    -- Client information
+    user_agent String,
+    device_type LowCardinality(String),
+    browser LowCardinality(String),
+    browser_version String,
+    os LowCardinality(String),
 
-    -- Scroll fields
-    scroll_depth Nullable(Float64),
-    scroll_direction Nullable(String),
-    scroll_element Nullable(String),
+    -- Location (from geo-enrichment)
+    country LowCardinality(String),
+    region Nullable(String),
+    city Nullable(String),
 
-    -- Performance fields
-    perf_lcp Nullable(Float64),
-    perf_fid Nullable(Float64),
-    perf_cls Nullable(Float64),
-    perf_ttfb Nullable(Float64),
-    perf_dom_content_loaded Nullable(Float64),
-    perf_load_complete Nullable(Float64),
-    perf_resource_count Nullable(UInt32),
-    perf_memory_usage Nullable(UInt64),
-
-    -- Custom fields
-    custom_event_name Nullable(String),
-    custom_properties Nullable(String),
+    -- Extensible JSON data blob for event-specific fields
+    data String,
 
     -- Metadata
-    user_agent Nullable(String),
-    ip Nullable(String),
-    screen_width Nullable(UInt32),
-    screen_height Nullable(UInt32),
-    viewport_width Nullable(UInt32),
-    viewport_height Nullable(UInt32),
-    device_pixel_ratio Nullable(Float64),
-    timezone Nullable(String),
-    language Nullable(String),
-
-    -- Partitioning
-    event_date Date DEFAULT toDate(timestamp)
+    created_at DateTime DEFAULT now()
 )
 ENGINE = MergeTree()
-PARTITION BY (tenant_id, toYYYYMM(event_date))
-ORDER BY (tenant_id, session_id, timestamp)
-TTL event_date + INTERVAL 90 DAY
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp, event_id)
+TTL timestamp + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
 /// SQL for creating the sessions table.
+///
+/// Aggregated session data computed by background workers.
 pub const CREATE_SESSIONS_TABLE: &str = r#"
-CREATE TABLE IF NOT EXISTS sessions (
-    id UUID,
-    tenant_id UUID,
+CREATE TABLE IF NOT EXISTS overwatch.sessions (
+    session_id String,
+    project_id String,
     user_id Nullable(String),
     started_at DateTime64(3),
     ended_at Nullable(DateTime64(3)),
@@ -78,27 +66,39 @@ CREATE TABLE IF NOT EXISTS sessions (
     duration_ms Nullable(UInt64),
 
     -- First/last event info
-    entry_path Nullable(String),
+    entry_url String,
+    entry_path String,
+    exit_url Nullable(String),
     exit_path Nullable(String),
+    referrer String,
 
     -- Aggregates
     pageview_count UInt32,
     click_count UInt32,
     scroll_max_depth Nullable(Float64),
 
-    -- Partitioning
-    session_date Date DEFAULT toDate(started_at)
+    -- Client info (from first event)
+    device_type LowCardinality(String),
+    browser LowCardinality(String),
+    os LowCardinality(String),
+    country LowCardinality(String),
+
+    -- Metadata
+    created_at DateTime DEFAULT now(),
+    updated_at DateTime DEFAULT now()
 )
-ENGINE = MergeTree()
-PARTITION BY (tenant_id, toYYYYMM(session_date))
-ORDER BY (tenant_id, started_at)
-TTL session_date + INTERVAL 90 DAY
+ENGINE = ReplacingMergeTree(updated_at)
+PARTITION BY toYYYYMM(started_at)
+ORDER BY (project_id, session_id)
+TTL started_at + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
 /// SQL for creating the internal metrics table (dogfooding).
+///
+/// Stores system metrics for monitoring the ingestion engine itself.
 pub const CREATE_METRICS_TABLE: &str = r#"
-CREATE TABLE IF NOT EXISTS internal_metrics (
+CREATE TABLE IF NOT EXISTS overwatch.internal_metrics (
     timestamp DateTime64(3),
     events_received UInt64,
     events_validated UInt64,
@@ -123,11 +123,55 @@ TTL timestamp + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192
 "#;
 
+/// SQL for creating the database.
+pub const CREATE_DATABASE: &str = r#"
+CREATE DATABASE IF NOT EXISTS overwatch
+"#;
+
 /// All table creation statements.
 pub fn all_tables() -> Vec<&'static str> {
     vec![
+        CREATE_DATABASE,
         CREATE_EVENTS_TABLE,
         CREATE_SESSIONS_TABLE,
         CREATE_METRICS_TABLE,
     ]
+}
+
+/// Event type values for the type column.
+pub mod event_types {
+    pub const PAGEVIEW: &str = "pageview";
+    pub const PAGELEAVE: &str = "pageleave";
+    pub const CLICK: &str = "click";
+    pub const SCROLL: &str = "scroll";
+    pub const FORM_FOCUS: &str = "form_focus";
+    pub const FORM_BLUR: &str = "form_blur";
+    pub const FORM_SUBMIT: &str = "form_submit";
+    pub const FORM_ABANDON: &str = "form_abandon";
+    pub const ERROR: &str = "error";
+    pub const VISIBILITY_CHANGE: &str = "visibility_change";
+    pub const RESOURCE_LOAD: &str = "resource_load";
+    pub const SESSION_START: &str = "session_start";
+    pub const SESSION_END: &str = "session_end";
+    pub const PERFORMANCE: &str = "performance";
+    pub const CUSTOM: &str = "custom";
+
+    /// All valid event types.
+    pub const ALL: &[&str] = &[
+        PAGEVIEW,
+        PAGELEAVE,
+        CLICK,
+        SCROLL,
+        FORM_FOCUS,
+        FORM_BLUR,
+        FORM_SUBMIT,
+        FORM_ABANDON,
+        ERROR,
+        VISIBILITY_CHANGE,
+        RESOURCE_LOAD,
+        SESSION_START,
+        SESSION_END,
+        PERFORMANCE,
+        CUSTOM,
+    ];
 }

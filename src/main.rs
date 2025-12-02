@@ -27,6 +27,10 @@ struct Config {
     #[serde(default = "default_port")]
     port: u16,
 
+    /// Auth service URL for API key validation
+    #[serde(default = "default_auth_url")]
+    auth_url: String,
+
     #[serde(default)]
     redpanda: RedpandaConfig,
 
@@ -42,11 +46,16 @@ fn default_port() -> u16 {
     8080
 }
 
+fn default_auth_url() -> String {
+    "http://auth-service:8080".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             host: default_host(),
             port: default_port(),
+            auth_url: default_auth_url(),
             redpanda: RedpandaConfig::default(),
             clickhouse: ClickHouseConfig::default(),
         }
@@ -100,7 +109,7 @@ async fn main() -> Result<()> {
     let _worker_handles = worker_scheduler.start();
 
     // Create application state
-    let state = AppState::new(producer.clone(), clickhouse.clone());
+    let state = AppState::new(producer.clone(), clickhouse.clone(), &config.auth_url);
 
     // Create router
     let app = router(state);

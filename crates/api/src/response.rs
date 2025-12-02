@@ -6,26 +6,33 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-/// Success response for ingestion.
+/// Success response for ingestion (matches spec).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IngestResponse {
-    pub status: &'static str,
-    pub batch_id: Uuid,
-    pub events_accepted: usize,
-    pub events_rejected: usize,
-    pub ingest_latency_ms: u64,
+    pub success: bool,
+    pub received: usize,
+    pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub errors: Option<Vec<String>>,
 }
 
 impl IngestResponse {
-    pub fn success(batch_id: Uuid, accepted: usize, rejected: usize, latency_ms: u64) -> Self {
+    pub fn success(received: usize) -> Self {
         Self {
-            status: "success",
-            batch_id,
-            events_accepted: accepted,
-            events_rejected: rejected,
-            ingest_latency_ms: latency_ms,
+            success: true,
+            received,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            errors: None,
+        }
+    }
+
+    pub fn partial(received: usize, errors: Vec<String>) -> Self {
+        Self {
+            success: true,
+            received,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            errors: if errors.is_empty() { None } else { Some(errors) },
         }
     }
 }
@@ -63,63 +70,92 @@ impl ErrorResponse {
     }
 }
 
-/// API error type.
+/// API error type with spec error codes.
 pub struct ApiError {
     pub status: StatusCode,
     pub response: ErrorResponse,
+    pub retry_after: Option<u64>,
 }
 
 impl ApiError {
+    pub fn with_code(status: StatusCode, code: impl Into<String>, msg: impl Into<String>) -> Self {
+        Self {
+            status,
+            response: ErrorResponse::new(msg, code),
+            retry_after: None,
+        }
+    }
+
     pub fn bad_request(msg: impl Into<String>) -> Self {
-        Self {
-            status: StatusCode::BAD_REQUEST,
-            response: ErrorResponse::new(msg, "BAD_REQUEST"),
-        }
+        Self::with_code(StatusCode::BAD_REQUEST, "VALID_001", msg)
     }
 
-    pub fn unauthorized(msg: impl Into<String>) -> Self {
-        Self {
-            status: StatusCode::UNAUTHORIZED,
-            response: ErrorResponse::new(msg, "UNAUTHORIZED"),
-        }
+    pub fn unauthorized(code: impl Into<String>, msg: impl Into<String>) -> Self {
+        Self::with_code(StatusCode::UNAUTHORIZED, code, msg)
     }
 
-    pub fn rate_limited(msg: impl Into<String>) -> Self {
+    pub fn forbidden(msg: impl Into<String>) -> Self {
+        Self::with_code(StatusCode::FORBIDDEN, "AUTH_005", msg)
+    }
+
+    pub fn rate_limited(msg: impl Into<String>, retry_after: Option<u64>) -> Self {
         Self {
             status: StatusCode::TOO_MANY_REQUESTS,
-            response: ErrorResponse::new(msg, "RATE_LIMITED"),
+            response: ErrorResponse::new(msg, "RATE_001"),
+            retry_after,
         }
     }
 
     pub fn internal(msg: impl Into<String>) -> Self {
-        Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            response: ErrorResponse::new(msg, "INTERNAL_ERROR"),
-        }
+        Self::with_code(StatusCode::INTERNAL_SERVER_ERROR, "DB_001", msg)
     }
 
-    pub fn validation(errors: Vec<String>) -> Self {
+    pub fn validation(code: impl Into<String>, errors: Vec<String>) -> Self {
         Self {
-            status: StatusCode::UNPROCESSABLE_ENTITY,
-            response: ErrorResponse::new("Validation failed", "VALIDATION_ERROR")
+            status: StatusCode::BAD_REQUEST,
+            response: ErrorResponse::new("Validation failed", code)
                 .with_details(errors),
+            retry_after: None,
         }
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, Json(self.response)).into_response()
+        let mut response = (self.status, Json(self.response)).into_response();
+
+        // Add Retry-After header for rate limit responses
+        if let Some(retry_after) = self.retry_after {
+            if let Ok(value) = retry_after.to_string().parse() {
+                response.headers_mut().insert("Retry-After", value);
+            }
+        }
+
+        response
     }
 }
 
 impl From<engine_core::Error> for ApiError {
     fn from(err: engine_core::Error) -> Self {
-        match err {
+        match &err {
+            engine_core::Error::Auth { code, message, http_status } => {
+                let status = StatusCode::from_u16(*http_status)
+                    .unwrap_or(StatusCode::UNAUTHORIZED);
+                ApiError::with_code(status, *code, message)
+            }
+            engine_core::Error::ValidationWithCode { code, message, .. } => {
+                ApiError::validation(*code, vec![message.clone()])
+            }
+            engine_core::Error::Database { code, message, .. } => {
+                ApiError::with_code(StatusCode::INTERNAL_SERVER_ERROR, *code, message)
+            }
+            engine_core::Error::RateLimit { message, retry_after, .. } => {
+                ApiError::rate_limited(message, *retry_after)
+            }
             engine_core::Error::Validation(msg) => ApiError::bad_request(msg),
-            engine_core::Error::Unauthorized(msg) => ApiError::unauthorized(msg),
-            engine_core::Error::RateLimited(msg) => ApiError::rate_limited(msg),
-            engine_core::Error::InvalidTenant(msg) => ApiError::unauthorized(msg),
+            engine_core::Error::Unauthorized(msg) => ApiError::unauthorized("AUTH_003", msg),
+            engine_core::Error::RateLimited(msg) => ApiError::rate_limited(msg, None),
+            engine_core::Error::InvalidTenant(msg) => ApiError::unauthorized("AUTH_003", msg),
             _ => ApiError::internal(err.to_string()),
         }
     }

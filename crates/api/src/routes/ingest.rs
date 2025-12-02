@@ -1,94 +1,114 @@
 //! Ingestion endpoint handler.
+//!
+//! Accepts SDK events in 3 formats:
+//! 1. Array: `[event, event, ...]`
+//! 2. Object with events: `{ "events": [...], "metadata": {...} }`
+//! 3. Single event: `{ "id": "...", "type": "...", ... }`
+//!
+//! Transforms to ClickHouse format and sends to Redpanda.
 
-use axum::{extract::State, Json};
-use engine_core::{schema::validate_batch, EventBatch};
-use telemetry::metrics;
+use axum::{body::Bytes, extract::State, Json};
+use engine_core::{
+    limits::{MAX_BATCH_EVENTS, MAX_BATCH_SIZE_BYTES},
+    transform_batch, SDKPayload, ValidationErrorCode,
+};
 use std::time::Instant;
+use telemetry::metrics;
 use tracing::{debug, error, info, warn};
-use uuid::Uuid;
 
-use crate::extractors::{ClientIp, TenantId};
+use crate::extractors::{AuthContext, ClientIp};
 use crate::response::{ApiError, IngestResponse};
 use crate::state::AppState;
 
 /// POST /ingest - Primary SDK ingestion endpoint.
+///
+/// Accepts SDK events in camelCase format, validates, transforms to
+/// ClickHouse format (snake_case), and sends to Redpanda for processing.
 pub async fn ingest_handler(
     State(state): State<AppState>,
-    TenantId(tenant_id): TenantId,
-    ClientIp(client_ip): ClientIp,
-    Json(mut batch): Json<EventBatch>,
+    auth: AuthContext,
+    ClientIp(_client_ip): ClientIp,
+    body: Bytes,
 ) -> Result<Json<IngestResponse>, ApiError> {
     let start = Instant::now();
-    let batch_id = Uuid::new_v4();
-    let total_events = batch.events.len();
 
     metrics().batches_received.inc();
-    metrics().events_received.inc_by(total_events as u64);
+
+    // Check payload size before parsing
+    if body.len() > MAX_BATCH_SIZE_BYTES {
+        return Err(ApiError::validation(
+            ValidationErrorCode::BatchTooLarge.code(),
+            vec![format!(
+                "Payload size {}KB exceeds {}KB limit",
+                body.len() / 1024,
+                MAX_BATCH_SIZE_BYTES / 1024
+            )],
+        ));
+    }
 
     debug!(
-        batch_id = %batch_id,
-        tenant_id = %tenant_id,
-        events = total_events,
+        project_id = %auth.project_id,
+        payload_size = body.len(),
         "Received event batch"
     );
 
-    // Validate batch
-    let validation_errors = validate_batch(&batch).map_err(|e| {
-        error!("Batch validation failed: {}", e);
+    // Parse SDK payload (supports 3 formats)
+    let payload = SDKPayload::parse(&body).map_err(|e| {
+        error!("Failed to parse SDK payload: {}", e);
         ApiError::bad_request(e.to_string())
     })?;
 
-    let rejected = validation_errors.len();
+    let total_events = payload.events.len();
+    metrics().events_received.inc_by(total_events as u64);
+
+    // Check batch size limit
+    if total_events > MAX_BATCH_EVENTS {
+        return Err(ApiError::validation(
+            ValidationErrorCode::BatchTooLarge.code(),
+            vec![format!(
+                "Batch has {} events, exceeds {} limit",
+                total_events, MAX_BATCH_EVENTS
+            )],
+        ));
+    }
+
+    // Transform SDK events to ClickHouse format
+    let (ch_events, transform_errors) = transform_batch(payload.events, &auth.project_id)
+        .map_err(|e| {
+            error!("Transform failed: {}", e);
+            ApiError::internal("Failed to process events")
+        })?;
+
+    let accepted = ch_events.len();
+    let rejected = transform_errors.len();
+
     if rejected > 0 {
         warn!(
-            batch_id = %batch_id,
+            project_id = %auth.project_id,
+            accepted = accepted,
             rejected = rejected,
             "Some events failed validation"
         );
         metrics().events_failed_validation.inc_by(rejected as u64);
     }
 
-    // Enrich events with server-side data
-    for event in &mut batch.events {
-        // Ensure tenant_id matches
-        if event.tenant_id != tenant_id {
-            event.tenant_id = tenant_id;
-        }
-
-        // Add client IP to metadata
-        if let Some(ref mut meta) = event.metadata {
-            if meta.ip.is_none() {
-                meta.ip = client_ip.clone();
-            }
-        }
-
-        // Set received_at timestamp
-        event.received_at = chrono::Utc::now();
-    }
-
-    // Filter out invalid events
-    let valid_events: Vec<_> = batch
-        .events
-        .into_iter()
-        .enumerate()
-        .filter(|(i, _)| !validation_errors.iter().any(|e| e.to_string().contains(&format!("event[{}]", i))))
-        .map(|(_, e)| e)
-        .collect();
-
-    let accepted = valid_events.len();
     metrics().events_validated.inc_by(accepted as u64);
 
     // Send to Redpanda
-    if !valid_events.is_empty() {
-        let send_result = state.producer.send_many(valid_events).await.map_err(|e| {
-            error!("Failed to send events to Redpanda: {}", e);
-            ApiError::internal("Failed to process events")
-        })?;
+    if !ch_events.is_empty() {
+        let send_result = state
+            .producer
+            .send_clickhouse_events(ch_events)
+            .await
+            .map_err(|e| {
+                error!("Failed to send events to Redpanda: {}", e);
+                ApiError::internal("Failed to store events")
+            })?;
 
         if !send_result.errors.is_empty() {
             warn!(
-                batch_id = %batch_id,
-                errors = ?send_result.errors,
+                project_id = %auth.project_id,
+                send_errors = ?send_result.errors,
                 "Some events failed to send"
             );
         }
@@ -98,18 +118,21 @@ pub async fn ingest_handler(
     metrics().ingest_latency_ms.observe(latency_ms);
 
     info!(
-        batch_id = %batch_id,
-        tenant_id = %tenant_id,
+        project_id = %auth.project_id,
         accepted = accepted,
         rejected = rejected,
         latency_ms = latency_ms,
         "Batch processed"
     );
 
-    Ok(Json(IngestResponse::success(
-        batch_id,
-        accepted,
-        rejected,
-        latency_ms,
-    )))
+    // Return response with partial errors if any
+    if rejected > 0 {
+        let error_msgs: Vec<String> = transform_errors
+            .into_iter()
+            .map(|e| e.to_string())
+            .collect();
+        Ok(Json(IngestResponse::partial(accepted, error_msgs)))
+    } else {
+        Ok(Json(IngestResponse::success(accepted)))
+    }
 }

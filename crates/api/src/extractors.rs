@@ -3,94 +3,57 @@
 use axum::{
     async_trait,
     extract::FromRequestParts,
-    http::{header, request::Parts, StatusCode},
+    http::{header, request::Parts},
 };
-use uuid::Uuid;
+use engine_core::{extract_api_key, ParsedApiKey};
 
 use crate::response::ApiError;
+use crate::state::AppState;
 
-/// Extracted tenant context from request.
+/// Authenticated context from request.
+///
+/// Contains validated API key and auth response from auth service.
 #[derive(Debug, Clone)]
-pub struct TenantId(pub Uuid);
-
-#[async_trait]
-impl<S> FromRequestParts<S> for TenantId
-where
-    S: Send + Sync,
-{
-    type Rejection = ApiError;
-
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        // Try X-Tenant-ID header first
-        if let Some(tenant_header) = parts.headers.get("X-Tenant-ID") {
-            let tenant_str = tenant_header
-                .to_str()
-                .map_err(|_| ApiError::bad_request("Invalid X-Tenant-ID header"))?;
-
-            let tenant_id = Uuid::parse_str(tenant_str)
-                .map_err(|_| ApiError::bad_request("Invalid tenant ID format"))?;
-
-            return Ok(TenantId(tenant_id));
-        }
-
-        // Try to extract from API key (format: tenant_id:key)
-        if let Some(auth_header) = parts.headers.get(header::AUTHORIZATION) {
-            let auth_str = auth_header
-                .to_str()
-                .map_err(|_| ApiError::bad_request("Invalid Authorization header"))?;
-
-            // Expect "Bearer <api_key>" format
-            let token = auth_str
-                .strip_prefix("Bearer ")
-                .ok_or_else(|| ApiError::unauthorized("Invalid authorization format"))?;
-
-            // API key format: tenant_id:secret
-            if let Some((tenant_part, _)) = token.split_once(':') {
-                let tenant_id = Uuid::parse_str(tenant_part)
-                    .map_err(|_| ApiError::unauthorized("Invalid API key format"))?;
-                return Ok(TenantId(tenant_id));
-            }
-        }
-
-        Err(ApiError::unauthorized("Missing tenant identification"))
-    }
+pub struct AuthContext {
+    /// Validated API key
+    pub api_key: ParsedApiKey,
+    /// Project ID from auth response
+    pub project_id: String,
+    /// Rate limit (requests per minute)
+    pub rate_limit: u32,
+    /// Allowed origins for CORS
+    pub allowed_origins: Option<Vec<String>>,
 }
 
-/// Extracted API key from request.
-#[derive(Debug, Clone)]
-pub struct ApiKey(pub String);
-
 #[async_trait]
-impl<S> FromRequestParts<S> for ApiKey
-where
-    S: Send + Sync,
-{
+impl FromRequestParts<AppState> for AuthContext {
     type Rejection = ApiError;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        // Try Authorization header
-        if let Some(auth_header) = parts.headers.get(header::AUTHORIZATION) {
-            let auth_str = auth_header
-                .to_str()
-                .map_err(|_| ApiError::bad_request("Invalid Authorization header"))?;
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        // Extract API key from headers
+        let auth_header = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|h| h.to_str().ok());
 
-            let token = auth_str
-                .strip_prefix("Bearer ")
-                .ok_or_else(|| ApiError::unauthorized("Invalid authorization format"))?;
+        let api_key_header = parts
+            .headers
+            .get("X-API-Key")
+            .and_then(|h| h.to_str().ok());
 
-            return Ok(ApiKey(token.to_string()));
-        }
+        let api_key = extract_api_key(auth_header, api_key_header)?;
 
-        // Try X-API-Key header
-        if let Some(key_header) = parts.headers.get("X-API-Key") {
-            let key = key_header
-                .to_str()
-                .map_err(|_| ApiError::bad_request("Invalid X-API-Key header"))?;
+        // Call auth service to validate key
+        let auth_response = state.auth_client.validate(&api_key).await?;
 
-            return Ok(ApiKey(key.to_string()));
-        }
+        let project_id = auth_response.project_id()?.to_string();
 
-        Err(ApiError::unauthorized("Missing API key"))
+        Ok(AuthContext {
+            api_key,
+            project_id,
+            rate_limit: auth_response.rate_limit_or_default(),
+            allowed_origins: auth_response.allowed_origins.clone(),
+        })
     }
 }
 

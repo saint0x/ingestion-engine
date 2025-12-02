@@ -32,10 +32,10 @@ pub const MAX_BATCH_SIZE_BYTES: usize = 1024 * 1024;
 /// Already enforced via validator, centralized here for reference.
 pub const MAX_BATCH_EVENTS: usize = 1000;
 
-/// Maximum single event size in bytes (32KB).
+/// Maximum single event size in bytes (64KB).
 ///
 /// Accounts for custom events with large properties payloads.
-pub const MAX_EVENT_SIZE_BYTES: usize = 32 * 1024;
+pub const MAX_EVENT_SIZE_BYTES: usize = 64 * 1024;
 
 // === Custom Event Limits ===
 
@@ -66,9 +66,16 @@ pub const MAX_LANGUAGE_LEN: usize = 16;
 /// UUIDs=36, emails=~50, custom IDs up to 128.
 pub const MAX_USER_ID_LEN: usize = 128;
 
+/// URL max length.
+/// Matches common browser URL limits.
+pub const MAX_URL_LEN: usize = 2048;
+
 /// Referrer URL max length.
 /// Matches HTTP Referer header limit.
 pub const MAX_REFERRER_LEN: usize = 2048;
+
+/// Path max length.
+pub const MAX_PATH_LEN: usize = 2000;
 
 /// HTML element tag name max length.
 /// Tags are short (div, button, custom-element).
@@ -110,3 +117,12 @@ pub const MAX_FUTURE_SKEW_SECS: i64 = 5;
 
 /// Maximum age for stale events (hours).
 pub const MAX_EVENT_AGE_HOURS: i64 = 24;
+
+// === API Key ===
+
+/// API key regex pattern.
+/// Format: owk_(live|test)_[a-zA-Z0-9]{32}
+pub const API_KEY_PATTERN: &str = r"^owk_(live|test)_[a-zA-Z0-9]{32}$";
+
+/// API key total length (owk_ + live/test + _ + 32 chars = 41-42).
+pub const API_KEY_MAX_LEN: usize = 42;

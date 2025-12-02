@@ -219,7 +219,7 @@ pub struct ClickHouseEventRow {
     pub user_id: Option<String>,
     #[serde(rename = "type")]
     pub event_type: String,
-    pub timestamp: String, // DateTime64(3) as string
+    pub timestamp: i64, // DateTime64(3) as milliseconds
     pub url: String,
     pub path: String,
     pub referrer: String,

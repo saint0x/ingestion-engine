@@ -6,7 +6,7 @@
 //! - Transforming to ClickHouse format (snake_case, DateTime)
 //! - Supporting 3 payload formats (array, object with events, single)
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -218,7 +218,7 @@ pub struct ClickHouseEvent {
     pub user_id: Option<String>,
     #[serde(rename = "type")]
     pub event_type: String,
-    pub timestamp: String, // DateTime64(3) as ISO string
+    pub timestamp: i64, // DateTime64(3) as milliseconds since epoch
     pub url: String,
     pub path: String,
     pub referrer: String,
@@ -306,7 +306,7 @@ impl ClickHouseEvent {
             session_id: event.session_id,
             user_id: event.user_id,
             event_type: event.event_type.as_str().to_string(),
-            timestamp: format_clickhouse_timestamp(timestamp),
+            timestamp: timestamp.timestamp_millis(),
             url: event.url,
             path,
             referrer: event.referrer.unwrap_or_default(),
@@ -328,11 +328,6 @@ fn extract_path(url: &str) -> String {
     url::Url::parse(url)
         .map(|u| u.path().to_string())
         .unwrap_or_else(|_| "/".to_string())
-}
-
-/// Format timestamp for ClickHouse DateTime64(3).
-fn format_clickhouse_timestamp(dt: DateTime<Utc>) -> String {
-    dt.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
 }
 
 /// Validate an SDK event.

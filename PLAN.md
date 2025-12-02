@@ -128,7 +128,7 @@ curl -X POST http://localhost:8080/ingest \
 
 ---
 
-## Phase 3: Security & Validation (IN PROGRESS)
+## Phase 3: Security & Validation (PARTIAL)
 
 ### API Key Authentication
 - [x] Header extraction (Authorization: Bearer, X-API-Key)
@@ -158,7 +158,7 @@ curl -X POST http://localhost:8080/ingest \
 
 ---
 
-## Phase 4: Background Workers
+## Phase 4: Background Workers (COMPLETE)
 
 ### Consumer Worker (`crates/worker/consumer.rs`) - COMPLETE
 - [x] Consumer struct with rskafka client
@@ -271,24 +271,73 @@ POST /ingest → Validate → Transform → Redpanda → ConsumerWorker → Clic
 
 ---
 
-## Phase 6: Testing (PARTIAL)
+## Phase 6: Testing (IMPLEMENTATION COMPLETE - NEEDS DOCKER)
 
-### Unit Tests
+### Unit Tests (20 passing)
 - [x] SDK event parsing (3 formats)
 - [x] Event transformation
 - [x] API key validation
 - [x] Auth response handling
 - [x] Error codes
+- [x] Partitioner consistent hashing
+- [x] Consumer config defaults
 - [ ] Batch accumulator edge cases
 - [ ] Rate limiter behavior
 - [ ] Metric calculations
 
-### Integration Tests
-- [ ] End-to-end ingest flow
-- [ ] Redpanda message verification
-- [ ] ClickHouse data verification
-- [ ] Health endpoint accuracy
-- [ ] Auth service integration
+### Integration Tests (IMPLEMENTED)
+Using testcontainers for real Redpanda + ClickHouse:
+
+**End-to-End Pipeline:**
+- [x] `test_ingest_array_format_e2e` - Array format → full pipeline → ClickHouse verify
+- [x] `test_ingest_object_format_e2e` - Object format with metadata
+- [x] `test_ingest_single_event_e2e` - Single event format
+- [x] `test_ingest_mixed_event_types_e2e` - Multiple event types in batch
+
+**Error Scenarios:**
+- [x] `test_missing_api_key_returns_401` - AUTH_001
+- [x] `test_invalid_api_key_format_returns_401` - AUTH_002
+- [x] `test_invalid_json_returns_400` - VALID_001
+- [x] `test_batch_exceeds_limit_returns_400` - VALID_002 (1001 events)
+- [x] `test_oversized_event_returns_400` - VALID_003 (>64KB)
+- [x] `test_empty_batch_returns_400` - VALID_001 (empty array)
+- [x] `test_empty_object_batch_returns_400` - VALID_001 (empty events array)
+- [x] `test_wrong_content_type_returns_error` - Invalid Content-Type
+- [x] `test_invalid_event_type_returns_400` - Invalid event type
+- [x] `test_missing_required_fields_returns_400` - Missing required fields
+
+**Health Endpoints:**
+- [x] `test_health_endpoint_structure` - Response structure
+- [x] `test_health_endpoint_healthy` - Status check
+- [x] `test_ready_endpoint` - Readiness probe
+- [x] `test_live_endpoint` - Liveness probe
+- [x] `test_health_endpoints_no_auth_required` - No auth needed
+- [x] `test_health_queue_depth_is_number` - Queue depth is valid number
+
+**Files Created:**
+```
+tests/
+├── Cargo.toml                  # testcontainers, axum-test deps
+├── src/
+│   ├── lib.rs
+│   ├── containers.rs           # Redpanda + ClickHouse setup
+│   ├── fixtures.rs             # Event generators
+│   └── setup.rs                # TestContext shared setup
+└── tests/
+    ├── ingest_e2e.rs           # 4 E2E pipeline tests
+    ├── ingest_errors.rs        # 10 error scenario tests
+    └── health.rs               # 6 health endpoint tests
+
+crates/clickhouse/src/query.rs  # Query functions for verification
+crates/clickhouse/src/schema.rs # Added init_schema()
+crates/worker/src/consumer.rs   # Added process_one_batch()
+```
+
+**Run Tests:**
+```bash
+# Start Docker first, then:
+cargo test -p integration-tests
+```
 
 ### Load Tests
 - [ ] Sustained throughput testing

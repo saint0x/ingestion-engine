@@ -2,7 +2,7 @@
 
 use clickhouse_client::ClickHouseClient;
 use engine_core::{AuthResponse, Error, ParsedApiKey};
-use redpanda::Producer;
+use redpanda::EventProducer;
 use std::sync::Arc;
 
 /// Auth service client.
@@ -59,8 +59,8 @@ fn generate_mock_project_id(api_key: &ParsedApiKey) -> String {
 /// Shared application state.
 #[derive(Clone)]
 pub struct AppState {
-    /// Redpanda producer
-    pub producer: Arc<Producer>,
+    /// Event producer (Redpanda in production, mock in tests)
+    pub producer: Arc<dyn EventProducer>,
     /// ClickHouse client
     pub clickhouse: Arc<ClickHouseClient>,
     /// Auth service client
@@ -69,7 +69,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        producer: Arc<Producer>,
+        producer: Arc<dyn EventProducer>,
         clickhouse: Arc<ClickHouseClient>,
         auth_url: impl Into<String>,
     ) -> Self {

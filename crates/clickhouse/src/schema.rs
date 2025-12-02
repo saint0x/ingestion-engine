@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS overwatch.events (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp, event_id)
-TTL timestamp + INTERVAL 90 DAY
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS overwatch.sessions (
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toYYYYMM(started_at)
 ORDER BY (project_id, session_id)
-TTL started_at + INTERVAL 90 DAY
+TTL toDateTime(started_at) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS overwatch.internal_metrics (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY timestamp
-TTL timestamp + INTERVAL 30 DAY
+TTL toDateTime(timestamp) + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -136,6 +136,24 @@ pub fn all_tables() -> Vec<&'static str> {
         CREATE_SESSIONS_TABLE,
         CREATE_METRICS_TABLE,
     ]
+}
+
+use crate::client::ClickHouseClient;
+use engine_core::Result;
+
+/// Initialize the database schema.
+///
+/// Creates the database and all tables if they don't exist.
+pub async fn init_schema(client: &ClickHouseClient) -> Result<()> {
+    for sql in all_tables() {
+        client
+            .inner()
+            .query(sql)
+            .execute()
+            .await
+            .map_err(|e| engine_core::Error::internal(format!("Schema init error: {}", e)))?;
+    }
+    Ok(())
 }
 
 /// Event type values for the type column.

@@ -141,6 +141,13 @@ impl ConsumerWorker {
         }
     }
 
+    /// Process a single batch (public method for testing).
+    ///
+    /// Returns the number of events inserted, or 0 if batch was empty.
+    pub async fn process_one_batch(&self) -> Result<usize> {
+        self.process_batch().await
+    }
+
     /// Inserts events with retry logic.
     async fn insert_with_retry(
         &self,

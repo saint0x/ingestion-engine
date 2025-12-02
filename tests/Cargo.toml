@@ -1,0 +1,52 @@
+[package]
+name = "integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# Internal crates
+api = { path = "../crates/api" }
+engine-core = { path = "../crates/core" }
+redpanda = { path = "../crates/redpanda" }
+clickhouse-client = { path = "../crates/clickhouse" }
+worker = { path = "../crates/worker" }
+telemetry = { path = "../crates/telemetry" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Web framework
+axum = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Testing
+testcontainers = { workspace = true }
+axum-test = { workspace = true }
+reqwest = { workspace = true }
+
+# Utils
+uuid = { workspace = true }
+chrono = { workspace = true }
+bytes = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "ingest_e2e"
+path = "tests/ingest_e2e.rs"
+
+[[test]]
+name = "ingest_errors"
+path = "tests/ingest_errors.rs"
+
+[[test]]
+name = "health"
+path = "tests/health.rs"

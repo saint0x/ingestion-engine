@@ -3,6 +3,7 @@
 use crate::batch::{BatchAccumulator, BatchConfig, EventBatch};
 use crate::config::RedpandaConfig;
 use crate::partitioner::{get_partition_key, PartitionStrategy};
+use async_trait::async_trait;
 use engine_core::{ClickHouseEvent, Event, Result};
 use telemetry::metrics;
 use rskafka::client::{
@@ -18,10 +19,23 @@ use tokio::sync::RwLock;
 use tracing::{debug, error};
 
 /// Result of sending events.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SendResult {
     pub events_sent: usize,
     pub errors: Vec<String>,
+}
+
+/// Trait for event production (enables mocking in tests).
+///
+/// This trait abstracts the producer behavior so tests can use a mock
+/// implementation that captures events in memory instead of sending to Kafka.
+#[async_trait]
+pub trait EventProducer: Send + Sync {
+    /// Send ClickHouse events to the message queue.
+    async fn send_clickhouse_events(&self, events: Vec<ClickHouseEvent>) -> Result<SendResult>;
+
+    /// Check if producer is healthy.
+    fn is_healthy(&self) -> bool;
 }
 
 /// High-throughput producer with batching.
@@ -315,6 +329,18 @@ impl Producer {
 
     /// Checks if producer is healthy.
     pub async fn health_check(&self) -> bool {
+        true
+    }
+}
+
+/// Implement EventProducer trait for Producer.
+#[async_trait]
+impl EventProducer for Producer {
+    async fn send_clickhouse_events(&self, events: Vec<ClickHouseEvent>) -> Result<SendResult> {
+        Producer::send_clickhouse_events(self, events).await
+    }
+
+    fn is_healthy(&self) -> bool {
         true
     }
 }

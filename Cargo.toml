@@ -13,6 +13,7 @@ members = [
     "crates/clickhouse",
     "crates/worker",
     "crates/telemetry",
+    "tests",
 ]
 resolver = "2"
 
@@ -42,6 +43,9 @@ validator = { version = "0.18", features = ["derive"] }
 thiserror = "1"
 anyhow = "1"
 
+# Async traits
+async-trait = "0.1"
+
 # Tracing (structured logging only, no external deps)
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
@@ -55,6 +59,12 @@ parking_lot = "0.12"
 time = "0.3"
 url = "2"
 regex = "1"
+bytes = "1"
+
+# Testing
+testcontainers = "0.23"
+axum-test = "16"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 # Internal crates
 engine-core = { path = "crates/core" }

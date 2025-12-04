@@ -29,6 +29,9 @@ pub struct PerformanceMetrics {
     /// Time to First Byte (ms)
     #[validate(range(min = 0.0, max = 60000.0))]
     pub ttfb: Option<f64>,
+    /// First Contentful Paint (ms)
+    #[validate(range(min = 0.0, max = 60000.0))]
+    pub fcp: Option<f64>,
     /// DOM Content Loaded (ms)
     #[validate(range(min = 0.0, max = 120000.0))]
     pub dom_content_loaded: Option<f64>,

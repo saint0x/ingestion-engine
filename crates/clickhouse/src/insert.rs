@@ -43,6 +43,7 @@ pub struct EventRow {
     pub perf_fid: Option<f64>,
     pub perf_cls: Option<f64>,
     pub perf_ttfb: Option<f64>,
+    pub perf_fcp: Option<f64>,
     pub perf_dom_content_loaded: Option<f64>,
     pub perf_load_complete: Option<f64>,
     pub perf_resource_count: Option<u32>,
@@ -96,6 +97,7 @@ impl From<Event> for EventRow {
             perf_fid: None,
             perf_cls: None,
             perf_ttfb: None,
+            perf_fcp: None,
             perf_dom_content_loaded: None,
             perf_load_complete: None,
             perf_resource_count: None,
@@ -144,6 +146,7 @@ impl From<Event> for EventRow {
                 row.perf_fid = data.metrics.fid;
                 row.perf_cls = data.metrics.cls;
                 row.perf_ttfb = data.metrics.ttfb;
+                row.perf_fcp = data.metrics.fcp;
                 row.perf_dom_content_loaded = data.metrics.dom_content_loaded;
                 row.perf_load_complete = data.metrics.load_complete;
                 row.perf_resource_count = data.metrics.resource_count;
@@ -369,4 +372,344 @@ pub async fn insert_metrics(client: &ClickHouseClient, snapshot: MetricsSnapshot
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
 
     Ok(())
+}
+
+// ============================================================================
+// Specialized table row types for TS daemon compatibility
+// ============================================================================
+
+/// Row for overwatch.pageviews table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct PageviewRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub url: String,
+    pub title: String,
+    pub path: String,
+    pub referrer: String,
+    pub user_agent: String,
+    pub device_type: String,
+    pub browser: String,
+    pub browser_version: String,
+    pub os: String,
+    pub country: String,
+    pub region: Option<String>,
+    pub city: Option<String>,
+}
+
+/// Row for overwatch.clicks table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct ClickRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub x: f64,
+    pub y: f64,
+    pub target: String,
+    pub selector: String,
+    pub url: String,
+}
+
+/// Row for overwatch.scroll_events table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct ScrollEventRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub depth: f64,
+    pub max_depth: f64,
+    pub url: String,
+}
+
+/// Row for overwatch.mouse_moves table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct MouseMoveRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub x: f64,
+    pub y: f64,
+    pub viewport_x: f64,
+    pub viewport_y: f64,
+    pub url: String,
+}
+
+/// Row for overwatch.form_events table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct FormEventRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub form_id: String,
+    pub field_name: String,
+    pub event_type: String,
+    pub url: String,
+}
+
+/// Row for overwatch.errors table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct ErrorRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub message: String,
+    pub stack: String,
+    pub url: String,
+    pub line: u32,
+    pub column: u32,
+}
+
+/// Row for overwatch.performance_metrics table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct PerformanceMetricRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub lcp: Option<f64>,
+    pub fid: Option<f64>,
+    pub cls: Option<f64>,
+    pub ttfb: Option<f64>,
+    pub fcp: Option<f64>,
+    pub url: String,
+}
+
+/// Row for overwatch.visibility_events table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct VisibilityEventRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub state: String,
+    pub hidden_duration: Option<u64>,
+    pub url: String,
+}
+
+/// Row for overwatch.resource_loads table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct ResourceLoadRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub resource_url: String,
+    pub resource_type: String,
+    pub duration: f64,
+    pub size: u64,
+    pub url: String,
+}
+
+/// Row for overwatch.geographic table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct GeographicRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub country: String,
+    pub region: Option<String>,
+    pub city: Option<String>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
+    pub url: String,
+}
+
+/// Row for overwatch.custom_events table.
+#[derive(Debug, Clone, Row, Serialize, Deserialize)]
+pub struct CustomEventRow {
+    pub project_id: String,
+    pub session_id: String,
+    pub timestamp: i64,
+    pub name: String,
+    pub properties: String,
+    pub url: String,
+}
+
+// ============================================================================
+// Per-table insert functions
+// ============================================================================
+
+/// Insert pageview events.
+pub async fn insert_pageviews(client: &ClickHouseClient, rows: Vec<PageviewRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.pageviews")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert click events.
+pub async fn insert_clicks(client: &ClickHouseClient, rows: Vec<ClickRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.clicks")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert scroll events.
+pub async fn insert_scroll_events(client: &ClickHouseClient, rows: Vec<ScrollEventRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.scroll_events")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert mouse move events.
+pub async fn insert_mouse_moves(client: &ClickHouseClient, rows: Vec<MouseMoveRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.mouse_moves")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert form events.
+pub async fn insert_form_events(client: &ClickHouseClient, rows: Vec<FormEventRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.form_events")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert error events.
+pub async fn insert_errors(client: &ClickHouseClient, rows: Vec<ErrorRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.errors")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert performance metric events.
+pub async fn insert_performance_metrics(client: &ClickHouseClient, rows: Vec<PerformanceMetricRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.performance_metrics")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert visibility events.
+pub async fn insert_visibility_events(client: &ClickHouseClient, rows: Vec<VisibilityEventRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.visibility_events")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert resource load events.
+pub async fn insert_resource_loads(client: &ClickHouseClient, rows: Vec<ResourceLoadRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.resource_loads")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert geographic events.
+pub async fn insert_geographic(client: &ClickHouseClient, rows: Vec<GeographicRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.geographic")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
+}
+
+/// Insert custom events.
+pub async fn insert_custom_events(client: &ClickHouseClient, rows: Vec<CustomEventRow>) -> Result<usize> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let count = rows.len();
+    let mut insert = client.inner().insert("overwatch.custom_events")
+        .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
+    for row in &rows {
+        insert.write(row).await
+            .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
+    }
+    insert.end().await
+        .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
+    Ok(count)
 }

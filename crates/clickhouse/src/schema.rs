@@ -123,6 +123,217 @@ TTL toDateTime(timestamp) + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192
 "#;
 
+/// SQL for creating the pageviews table.
+pub const CREATE_PAGEVIEWS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.pageviews (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    url String,
+    title String,
+    path String,
+    referrer String,
+    user_agent String,
+    device_type LowCardinality(String),
+    browser LowCardinality(String),
+    browser_version String,
+    os LowCardinality(String),
+    country LowCardinality(String),
+    region Nullable(String),
+    city Nullable(String)
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the clicks table.
+pub const CREATE_CLICKS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.clicks (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    x Float64,
+    y Float64,
+    target String,
+    selector String,
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the scroll_events table.
+pub const CREATE_SCROLL_EVENTS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.scroll_events (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    depth Float64,
+    max_depth Float64,
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the mouse_moves table.
+pub const CREATE_MOUSE_MOVES_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.mouse_moves (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    x Float64,
+    y Float64,
+    viewport_x Float64,
+    viewport_y Float64,
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the form_events table.
+pub const CREATE_FORM_EVENTS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.form_events (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    form_id String,
+    field_name String,
+    event_type LowCardinality(String),
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the errors table.
+pub const CREATE_ERRORS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.errors (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    message String,
+    stack String,
+    url String,
+    line UInt32,
+    column UInt32
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the performance_metrics table.
+pub const CREATE_PERFORMANCE_METRICS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.performance_metrics (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    lcp Nullable(Float64),
+    fid Nullable(Float64),
+    cls Nullable(Float64),
+    ttfb Nullable(Float64),
+    fcp Nullable(Float64),
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the visibility_events table.
+pub const CREATE_VISIBILITY_EVENTS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.visibility_events (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    state LowCardinality(String),
+    hidden_duration Nullable(UInt64),
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the resource_loads table.
+pub const CREATE_RESOURCE_LOADS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.resource_loads (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    resource_url String,
+    resource_type LowCardinality(String),
+    duration Float64,
+    size UInt64,
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the geographic table.
+pub const CREATE_GEOGRAPHIC_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.geographic (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    country LowCardinality(String),
+    region Nullable(String),
+    city Nullable(String),
+    lat Nullable(Float64),
+    lng Nullable(Float64),
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
+/// SQL for creating the custom_events table.
+pub const CREATE_CUSTOM_EVENTS_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS overwatch.custom_events (
+    project_id String,
+    session_id String,
+    timestamp DateTime64(3),
+    name String,
+    properties String,
+    url String
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (project_id, timestamp)
+TTL toDateTime(timestamp) + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192
+"#;
+
 /// SQL for creating the database.
 pub const CREATE_DATABASE: &str = r#"
 CREATE DATABASE IF NOT EXISTS overwatch
@@ -132,9 +343,22 @@ CREATE DATABASE IF NOT EXISTS overwatch
 pub fn all_tables() -> Vec<&'static str> {
     vec![
         CREATE_DATABASE,
+        // Legacy unified events table (kept for backwards compatibility)
         CREATE_EVENTS_TABLE,
         CREATE_SESSIONS_TABLE,
         CREATE_METRICS_TABLE,
+        // Specialized tables for TS daemon compatibility
+        CREATE_PAGEVIEWS_TABLE,
+        CREATE_CLICKS_TABLE,
+        CREATE_SCROLL_EVENTS_TABLE,
+        CREATE_MOUSE_MOVES_TABLE,
+        CREATE_FORM_EVENTS_TABLE,
+        CREATE_ERRORS_TABLE,
+        CREATE_PERFORMANCE_METRICS_TABLE,
+        CREATE_VISIBILITY_EVENTS_TABLE,
+        CREATE_RESOURCE_LOADS_TABLE,
+        CREATE_GEOGRAPHIC_TABLE,
+        CREATE_CUSTOM_EVENTS_TABLE,
     ]
 }
 
@@ -162,6 +386,7 @@ pub mod event_types {
     pub const PAGELEAVE: &str = "pageleave";
     pub const CLICK: &str = "click";
     pub const SCROLL: &str = "scroll";
+    pub const MOUSE_MOVE: &str = "mouse_move";
     pub const FORM_FOCUS: &str = "form_focus";
     pub const FORM_BLUR: &str = "form_blur";
     pub const FORM_SUBMIT: &str = "form_submit";
@@ -180,6 +405,7 @@ pub mod event_types {
         PAGELEAVE,
         CLICK,
         SCROLL,
+        MOUSE_MOVE,
         FORM_FOCUS,
         FORM_BLUR,
         FORM_SUBMIT,

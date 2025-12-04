@@ -16,6 +16,8 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 parking_lot = { workspace = true }
+reqwest = { workspace = true }
+moka = { workspace = true }
 
 engine-core = { workspace = true }
 redpanda = { workspace = true }

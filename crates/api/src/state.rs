@@ -122,6 +122,7 @@ impl AuthClient {
             rate_limit: Some(1000),
             allowed_origins: None,
             error: None,
+            mau: None,
         }
     }
 

@@ -129,6 +129,8 @@ pub struct AuthResponse {
     pub allowed_origins: Option<Vec<String>>,
     /// Error details if invalid.
     pub error: Option<AuthResponseError>,
+    /// MAU status for the project.
+    pub mau: Option<MauStatus>,
 }
 
 /// Auth error in response.
@@ -136,6 +138,16 @@ pub struct AuthResponse {
 pub struct AuthResponseError {
     pub code: String,
     pub message: String,
+}
+
+/// MAU (Monthly Active Users) status from daemon.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MauStatus {
+    /// MAU limit for the project's plan.
+    pub limit: u32,
+    /// Whether the project has exceeded its MAU limit.
+    pub is_over_limit: bool,
 }
 
 impl AuthResponse {

@@ -134,6 +134,7 @@ pub struct Metrics {
     pub events_validated: Counter,
     pub events_failed_validation: Counter,
     pub batches_received: Counter,
+    pub rate_limited_requests: Counter,
 
     // Redpanda producer metrics
     pub batches_sent_to_redpanda: Counter,

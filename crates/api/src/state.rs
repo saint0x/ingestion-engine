@@ -1,5 +1,6 @@
 //! Application state shared across handlers.
 
+use crate::middleware::rate_limit::{RateLimitConfig, RateLimiter, SharedRateLimiter};
 use clickhouse_client::ClickHouseClient;
 use engine_core::{AuthRequest, AuthResponse, Error, ParsedApiKey};
 use moka::future::Cache;
@@ -243,6 +244,8 @@ pub struct AppState {
     pub clickhouse: Arc<ClickHouseClient>,
     /// Auth service client
     pub auth_client: AuthClient,
+    /// Rate limiter
+    pub rate_limiter: SharedRateLimiter,
 }
 
 impl AppState {
@@ -255,6 +258,35 @@ impl AppState {
             producer,
             clickhouse,
             auth_client: AuthClient::new(auth_url),
+            rate_limiter: Arc::new(RateLimiter::new(RateLimitConfig::default())),
         }
+    }
+
+    /// Create with custom rate limit config.
+    pub fn with_rate_limit(
+        producer: Arc<dyn EventProducer>,
+        clickhouse: Arc<ClickHouseClient>,
+        auth_url: impl Into<String>,
+        rate_config: RateLimitConfig,
+    ) -> Self {
+        Self {
+            producer,
+            clickhouse,
+            auth_client: AuthClient::new(auth_url),
+            rate_limiter: Arc::new(RateLimiter::new(rate_config)),
+        }
+    }
+
+    /// Start the rate limiter cleanup background task.
+    /// Returns a handle that can be used to cancel the task.
+    pub fn start_rate_limiter_cleanup(&self) -> tokio::task::JoinHandle<()> {
+        let rate_limiter = self.rate_limiter.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
+            loop {
+                interval.tick().await;
+                rate_limiter.cleanup_stale();
+            }
+        })
     }
 }

@@ -14,9 +14,13 @@ use rskafka::record::Record;
 use chrono::Utc;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
+
+/// Maximum cached partition clients to prevent unbounded memory growth.
+/// In production, typically 1 topic × few partitions, so 64 is generous.
+const MAX_CACHED_CLIENTS: usize = 64;
 
 /// Result of sending events.
 #[derive(Debug, Clone)]
@@ -38,13 +42,19 @@ pub trait EventProducer: Send + Sync {
     fn is_healthy(&self) -> bool;
 }
 
+/// Cached client with creation time for LRU eviction.
+struct CachedClient {
+    client: Arc<rskafka::client::partition::PartitionClient>,
+    last_used: Instant,
+}
+
 /// High-throughput producer with batching.
 pub struct Producer {
     accumulator: Arc<BatchAccumulator>,
     config: RedpandaConfig,
     partition_strategy: PartitionStrategy,
-    /// Cached partition clients per topic
-    clients: RwLock<BTreeMap<String, Arc<rskafka::client::partition::PartitionClient>>>,
+    /// Cached partition clients per topic with LRU tracking
+    clients: RwLock<BTreeMap<String, CachedClient>>,
 }
 
 impl Producer {
@@ -64,6 +74,7 @@ impl Producer {
     }
 
     /// Gets or creates a partition client for a topic.
+    /// Uses LRU eviction when cache is at MAX_CACHED_CLIENTS capacity.
     async fn get_client(
         &self,
         topic: &str,
@@ -71,11 +82,12 @@ impl Producer {
     ) -> Result<Arc<rskafka::client::partition::PartitionClient>> {
         let key = format!("{}:{}", topic, partition);
 
-        // Check cache first
+        // Check cache first and update last_used
         {
-            let clients = self.clients.read().await;
-            if let Some(client) = clients.get(&key) {
-                return Ok(client.clone());
+            let mut clients = self.clients.write().await;
+            if let Some(cached) = clients.get_mut(&key) {
+                cached.last_used = Instant::now();
+                return Ok(cached.client.clone());
             }
         }
 
@@ -95,10 +107,37 @@ impl Producer {
 
         let partition_client = Arc::new(partition_client);
 
-        // Cache it
+        // Cache it with LRU eviction
         {
             let mut clients = self.clients.write().await;
-            clients.insert(key, partition_client.clone());
+
+            // Evict oldest entries if at capacity
+            while clients.len() >= MAX_CACHED_CLIENTS {
+                // Find the oldest (LRU) entry
+                let oldest_key = clients
+                    .iter()
+                    .min_by_key(|(_, v)| v.last_used)
+                    .map(|(k, _)| k.clone());
+
+                if let Some(oldest) = oldest_key {
+                    warn!(
+                        evicted_key = %oldest,
+                        cache_size = clients.len(),
+                        "Evicting LRU partition client from cache"
+                    );
+                    clients.remove(&oldest);
+                } else {
+                    break;
+                }
+            }
+
+            clients.insert(
+                key,
+                CachedClient {
+                    client: partition_client.clone(),
+                    last_used: Instant::now(),
+                },
+            );
         }
 
         Ok(partition_client)

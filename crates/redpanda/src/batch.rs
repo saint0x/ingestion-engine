@@ -5,6 +5,10 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+/// Maximum number of distinct topics to prevent unbounded memory growth.
+/// In production, topics are typically a small fixed set (e.g., "events", "metrics").
+const MAX_TOPICS: usize = 32;
+
 /// A batch of events for a specific topic.
 #[derive(Debug)]
 pub struct EventBatch {
@@ -79,9 +83,20 @@ impl BatchAccumulator {
 
     /// Add an event to the appropriate batch.
     /// Returns the batch if it should be flushed.
+    /// Returns None and drops the event if MAX_TOPICS is exceeded for unknown topics.
     pub fn add(&self, event: Event) -> Option<EventBatch> {
         let topic = event.payload.topic().to_string();
         let mut batches = self.batches.lock();
+
+        // Prevent unbounded topic growth - reject unknown topics if at capacity
+        if batches.len() >= MAX_TOPICS && !batches.contains_key(&topic) {
+            tracing::warn!(
+                topic = %topic,
+                max_topics = MAX_TOPICS,
+                "Rejecting event for unknown topic - MAX_TOPICS limit reached"
+            );
+            return None;
+        }
 
         let batch = batches
             .entry(topic.clone())

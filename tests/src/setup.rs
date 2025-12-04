@@ -56,7 +56,7 @@ impl TestContext {
         let state = AppState::new(
             mock_producer.clone() as Arc<dyn EventProducer>,
             clickhouse.clone(),
-            "http://mock-auth",
+            "mock",
         );
         let router = router(state);
 

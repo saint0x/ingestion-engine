@@ -34,6 +34,19 @@ pub async fn ingest_handler(
 
     metrics().batches_received.inc();
 
+    // Rate limit check by project_id
+    if !state.rate_limiter.check(&auth.project_id) {
+        metrics().rate_limited_requests.inc();
+        warn!(
+            project_id = %auth.project_id,
+            "Rate limit exceeded"
+        );
+        return Err(ApiError::rate_limited(
+            format!("Rate limit exceeded for project {}", auth.project_id),
+            Some(1), // Retry after 1 second
+        ));
+    }
+
     // Check payload size before parsing
     if body.len() > MAX_BATCH_SIZE_BYTES {
         return Err(ApiError::validation(

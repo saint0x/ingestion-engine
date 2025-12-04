@@ -122,6 +122,10 @@ async fn main() -> Result<()> {
     // Create application state
     let state = AppState::new(producer.clone(), clickhouse.clone(), &config.auth_url);
 
+    // Start rate limiter cleanup background task
+    let _rate_limiter_cleanup = state.start_rate_limiter_cleanup();
+    info!("Started rate limiter cleanup task (every 5 minutes)");
+
     // Create router
     let app = router(state);
 

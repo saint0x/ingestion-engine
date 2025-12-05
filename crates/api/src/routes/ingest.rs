@@ -20,7 +20,7 @@ use crate::extractors::{AuthContext, ClientIp};
 use crate::response::{ApiError, IngestResponse};
 use crate::state::AppState;
 
-/// POST /ingest - Primary SDK ingestion endpoint.
+/// POST /overwatch-ingest - Primary SDK ingestion endpoint.
 ///
 /// Accepts SDK events in camelCase format, validates, transforms to
 /// ClickHouse format (snake_case), and sends to Redpanda for processing.

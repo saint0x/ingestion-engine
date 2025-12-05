@@ -384,18 +384,25 @@ pub struct PageviewRow {
     pub project_id: String,
     pub session_id: String,
     pub timestamp: i64,
+    // Location
     pub url: String,
-    pub title: String,
     pub path: String,
-    pub referrer: String,
+    pub title: Option<String>,
+    pub referrer: Option<String>,
+    // Client info
     pub user_agent: String,
     pub device_type: String,
     pub browser: String,
     pub browser_version: String,
     pub os: String,
+    // Geo
     pub country: String,
     pub region: Option<String>,
     pub city: Option<String>,
+    // Engagement metrics (enrichment)
+    pub time_on_page_seconds: Option<u32>,
+    pub scroll_depth_percentage: u8,
+    pub page_load_time_ms: Option<u32>,
 }
 
 /// Row for overwatch.clicks table.
@@ -404,11 +411,19 @@ pub struct ClickRow {
     pub project_id: String,
     pub session_id: String,
     pub timestamp: i64,
+    pub url: String,
     pub x: f64,
     pub y: f64,
-    pub target: String,
-    pub selector: String,
-    pub url: String,
+    // Element info
+    pub selector: Option<String>,
+    pub target: Option<String>,
+    pub element_text: Option<String>,
+    pub element_tag: Option<String>,
+    pub element_id: Option<String>,
+    pub element_class: Option<String>,
+    // Viewport
+    pub viewport_width: Option<u16>,
+    pub viewport_height: Option<u16>,
 }
 
 /// Row for overwatch.scroll_events table.

@@ -1,7 +1,7 @@
 //! End-to-end tests for the ingest pipeline.
 //!
 //! These tests validate the full data flow using mock Kafka:
-//! POST /ingest → MockProducer (captures events) → ClickHouse
+//! POST /overwatch-ingest → MockProducer (captures events) → ClickHouse
 //!
 //! The MockProducer implements the same EventProducer trait as the real
 //! Producer, so we test all production code paths except the actual
@@ -13,7 +13,7 @@ use axum_test::TestServer;
 use clickhouse_client::{count_all_events, query_all_events, truncate_events};
 use integration_tests::{fixtures, setup::TestContext};
 
-/// Full pipeline test: POST /ingest → MockProducer → ClickHouse (array format)
+/// Full pipeline test: POST /overwatch-ingest → MockProducer → ClickHouse (array format)
 #[tokio::test]
 async fn test_ingest_array_format_e2e() {
     // Setup test environment
@@ -24,12 +24,12 @@ async fn test_ingest_array_format_e2e() {
     truncate_events(&ctx.clickhouse).await.ok();
     ctx.clear_captured();
 
-    // Send events via /ingest (array format)
+    // Send events via /overwatch-ingest (array format)
     let events = fixtures::sdk_events(5);
     let payload = fixtures::array_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())
@@ -83,7 +83,7 @@ async fn test_ingest_array_format_e2e() {
     );
 }
 
-/// Full pipeline test: POST /ingest → MockProducer → ClickHouse (object format)
+/// Full pipeline test: POST /overwatch-ingest → MockProducer → ClickHouse (object format)
 #[tokio::test]
 async fn test_ingest_object_format_e2e() {
     // Setup test environment
@@ -94,12 +94,12 @@ async fn test_ingest_object_format_e2e() {
     truncate_events(&ctx.clickhouse).await.ok();
     ctx.clear_captured();
 
-    // Send events via /ingest (object format with metadata)
+    // Send events via /overwatch-ingest (object format with metadata)
     let events = fixtures::sdk_events_of_type(3, "click");
     let payload = fixtures::object_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())
@@ -142,7 +142,7 @@ async fn test_ingest_object_format_e2e() {
     );
 }
 
-/// Full pipeline test: POST /ingest → MockProducer → ClickHouse (single event)
+/// Full pipeline test: POST /overwatch-ingest → MockProducer → ClickHouse (single event)
 #[tokio::test]
 async fn test_ingest_single_event_e2e() {
     // Setup test environment
@@ -153,12 +153,12 @@ async fn test_ingest_single_event_e2e() {
     truncate_events(&ctx.clickhouse).await.ok();
     ctx.clear_captured();
 
-    // Send single event via /ingest
+    // Send single event via /overwatch-ingest
     let event = fixtures::sdk_event("scroll");
     let payload = fixtures::single_payload(event);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())
@@ -218,7 +218,7 @@ async fn test_ingest_mixed_event_types_e2e() {
     let payload = fixtures::array_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())
@@ -274,12 +274,12 @@ async fn test_producer_failure_returns_error() {
     // Set producer to fail mode
     ctx.set_producer_failure(true);
 
-    // Send events via /ingest
+    // Send events via /overwatch-ingest
     let events = fixtures::sdk_events(2);
     let payload = fixtures::array_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())

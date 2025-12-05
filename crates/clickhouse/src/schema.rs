@@ -129,18 +129,25 @@ CREATE TABLE IF NOT EXISTS overwatch.pageviews (
     project_id String,
     session_id String,
     timestamp DateTime64(3),
+    -- Location
     url String,
-    title String,
     path String,
-    referrer String,
+    title Nullable(String),
+    referrer Nullable(String),
+    -- Client info
     user_agent String,
     device_type LowCardinality(String),
     browser LowCardinality(String),
     browser_version String,
     os LowCardinality(String),
+    -- Geo
     country LowCardinality(String),
     region Nullable(String),
-    city Nullable(String)
+    city Nullable(String),
+    -- Engagement metrics (enrichment)
+    time_on_page_seconds Nullable(UInt32),
+    scroll_depth_percentage UInt8 DEFAULT 0,
+    page_load_time_ms Nullable(UInt32)
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
@@ -155,11 +162,19 @@ CREATE TABLE IF NOT EXISTS overwatch.clicks (
     project_id String,
     session_id String,
     timestamp DateTime64(3),
+    url String,
     x Float64,
     y Float64,
-    target String,
-    selector String,
-    url String
+    -- Element info
+    selector Nullable(String),
+    target Nullable(String),
+    element_text Nullable(String),
+    element_tag Nullable(String),
+    element_id Nullable(String),
+    element_class Nullable(String),
+    -- Viewport
+    viewport_width Nullable(UInt16),
+    viewport_height Nullable(UInt16)
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)

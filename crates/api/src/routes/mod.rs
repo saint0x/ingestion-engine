@@ -23,7 +23,7 @@ pub fn router(state: AppState) -> Router {
         .allow_headers(Any);
 
     Router::new()
-        .route("/ingest", post(ingest::ingest_handler))
+        .route("/overwatch-ingest", post(ingest::ingest_handler))
         .route("/health", get(health::health_handler))
         .route("/health/ready", get(health::ready_handler))
         .route("/health/live", get(health::live_handler))

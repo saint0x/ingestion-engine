@@ -19,7 +19,7 @@ async fn test_missing_api_key_returns_401() {
     let payload = fixtures::array_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         // No API key header
         .bytes(payload.into())
@@ -43,7 +43,7 @@ async fn test_invalid_api_key_format_returns_401() {
     let payload = fixtures::array_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", "invalid_key_format")
         .bytes(payload.into())
@@ -68,7 +68,7 @@ async fn test_wrong_api_key_prefix_returns_401() {
 
     // Wrong prefix - should be owk_test_ or owk_live_
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", "owk_prod_ABC123xyz789DEF456ghi012JKL345mn")
         .bytes(payload.into())
@@ -89,7 +89,7 @@ async fn test_invalid_json_returns_400() {
     let server = TestServer::new(ctx.router.clone()).expect("Failed to create test server");
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes("not json at all".into())
@@ -110,7 +110,7 @@ async fn test_malformed_json_returns_400() {
     let server = TestServer::new(ctx.router.clone()).expect("Failed to create test server");
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(r#"[{"id": "123", "type": "#.into())
@@ -135,7 +135,7 @@ async fn test_batch_exceeds_limit_returns_400() {
     let payload = fixtures::array_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())
@@ -156,7 +156,7 @@ async fn test_empty_batch_accepted() {
     let server = TestServer::new(ctx.router.clone()).expect("Failed to create test server");
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes("[]".into())
@@ -179,7 +179,7 @@ async fn test_event_missing_required_field_returns_400() {
     let payload = r#"[{"id": "550e8400-e29b-41d4-a716-446655440000", "timestamp": 1704067200000, "sessionId": "11111111-1111-1111-1111-111111111111", "url": "https://example.com/", "userAgent": "Mozilla/5.0"}]"#;
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())
@@ -203,7 +203,7 @@ async fn test_invalid_event_type_returns_400() {
     let payload = r#"[{"id": "550e8400-e29b-41d4-a716-446655440000", "type": "invalid_type", "timestamp": 1704067200000, "sessionId": "11111111-1111-1111-1111-111111111111", "url": "https://example.com/", "userAgent": "Mozilla/5.0"}]"#;
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())
@@ -228,7 +228,7 @@ async fn test_bearer_token_auth_works() {
 
     // Use Authorization: Bearer instead of X-API-Key
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header(
             "Authorization",
@@ -253,7 +253,7 @@ async fn test_both_key_environments_work() {
     let payload = fixtures::array_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::test_api_key())
         .bytes(payload.into())
@@ -265,7 +265,7 @@ async fn test_both_key_environments_work() {
     let payload = fixtures::array_payload(events);
 
     let response = server
-        .post("/ingest")
+        .post("/overwatch-ingest")
         .content_type("application/json")
         .add_header("X-API-Key", &fixtures::live_api_key())
         .bytes(payload.into())

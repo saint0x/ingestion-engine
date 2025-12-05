@@ -31,7 +31,12 @@ tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "compression-gzip", "trace"] }
 
 # Redpanda (Kafka-compatible) - pure Rust client, no native deps
-rskafka = "0.5"
+rskafka = { version = "0.6", features = ["transport-tls"] }
+
+# TLS for Redpanda Cloud (must match rskafka's rustls version)
+# ring feature enables the crypto provider required by rustls 0.23+
+rustls = { version = "0.23", features = ["ring"] }
+webpki-roots = "0.26"
 
 # ClickHouse
 clickhouse = { version = "0.12", features = ["native-tls"] }
@@ -89,6 +94,7 @@ tracing-subscriber = { workspace = true }
 config = { workspace = true }
 dotenvy = { workspace = true }
 axum = { workspace = true }
+rustls = { workspace = true }
 
 engine-core = { workspace = true }
 api = { workspace = true }

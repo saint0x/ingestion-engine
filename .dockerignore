@@ -1,0 +1,33 @@
+# Build artifacts
+target/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation
+*.md
+!README.md
+
+# Tests (needed for workspace build)
+# tests/
+
+# Local config
+.env
+.env.*
+!.env.example
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Misc
+Makefile
+docker-compose*.yml
+Dockerfile*

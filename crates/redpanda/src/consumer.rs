@@ -9,7 +9,7 @@ use crate::config::ConsumerConfig;
 use engine_core::{ClickHouseEvent, Result};
 use rskafka::client::{
     partition::{OffsetAt, UnknownTopicHandling},
-    ClientBuilder,
+    ClientBuilder, Credentials, SaslConfig,
 };
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -17,6 +17,19 @@ use std::time::Duration;
 use telemetry::metrics;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
+
+/// Creates a TLS configuration for Redpanda Cloud.
+fn create_tls_config() -> Arc<rustls::ClientConfig> {
+    let root_store = rustls::RootCertStore::from_iter(
+        webpki_roots::TLS_SERVER_ROOTS.iter().cloned()
+    );
+
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
+    Arc::new(config)
+}
 
 /// Offset tracking for manual commit.
 #[derive(Debug, Clone, Copy)]
@@ -29,6 +42,10 @@ pub struct Offset {
 pub struct Consumer {
     config: ConsumerConfig,
     brokers: Vec<String>,
+    /// SASL username (for cloud authentication)
+    sasl_username: Option<String>,
+    /// SASL password (for cloud authentication)
+    sasl_password: Option<String>,
     /// Partition client (currently only partition 0)
     partition_client: RwLock<Option<Arc<rskafka::client::partition::PartitionClient>>>,
     /// Current offset (next offset to read)
@@ -39,7 +56,12 @@ pub struct Consumer {
 
 impl Consumer {
     /// Creates a new consumer.
-    pub async fn new(config: ConsumerConfig, brokers: Vec<String>) -> Result<Self> {
+    pub async fn new(
+        config: ConsumerConfig,
+        brokers: Vec<String>,
+        sasl_username: Option<String>,
+        sasl_password: Option<String>,
+    ) -> Result<Self> {
         info!(
             group_id = %config.group_id,
             topic = %config.topic,
@@ -50,6 +72,8 @@ impl Consumer {
         Ok(Self {
             config,
             brokers,
+            sasl_username,
+            sasl_password,
             partition_client: RwLock::new(None),
             current_offset: AtomicI64::new(-1),
             initialized: std::sync::atomic::AtomicBool::new(false),
@@ -68,7 +92,19 @@ impl Consumer {
 
         // Create new connection
         let connection = self.brokers.join(",");
-        let client = ClientBuilder::new(vec![connection])
+        let mut builder = ClientBuilder::new(vec![connection]);
+
+        // Add TLS and SASL auth if credentials provided (for Redpanda Cloud)
+        if let (Some(username), Some(password)) = (&self.sasl_username, &self.sasl_password) {
+            builder = builder
+                .tls_config(create_tls_config())
+                .sasl_config(SaslConfig::ScramSha256(Credentials::new(
+                    username.clone(),
+                    password.clone(),
+                )));
+        }
+
+        let client = builder
             .build()
             .await
             .map_err(|e| engine_core::Error::internal(format!("Failed to connect to Redpanda: {}", e)))?;

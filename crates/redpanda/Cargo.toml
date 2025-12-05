@@ -16,5 +16,9 @@ uuid = { workspace = true }
 parking_lot = { workspace = true }
 async-trait = { workspace = true }
 
+# TLS for Redpanda Cloud
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
+
 engine-core = { workspace = true }
 telemetry = { workspace = true }

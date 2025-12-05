@@ -8,7 +8,7 @@ use engine_core::{ClickHouseEvent, Event, Result};
 use telemetry::metrics;
 use rskafka::client::{
     partition::{Compression, UnknownTopicHandling},
-    ClientBuilder,
+    ClientBuilder, Credentials, SaslConfig,
 };
 use rskafka::record::Record;
 use chrono::Utc;
@@ -17,6 +17,19 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
+
+/// Creates a TLS configuration for Redpanda Cloud.
+fn create_tls_config() -> Arc<rustls::ClientConfig> {
+    let root_store = rustls::RootCertStore::from_iter(
+        webpki_roots::TLS_SERVER_ROOTS.iter().cloned()
+    );
+
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
+    Arc::new(config)
+}
 
 /// Maximum cached partition clients to prevent unbounded memory growth.
 /// In production, typically 1 topic × few partitions, so 64 is generous.
@@ -93,7 +106,20 @@ impl Producer {
 
         // Create new client
         let connection = self.config.broker_string();
-        let client = ClientBuilder::new(vec![connection])
+        let mut builder = ClientBuilder::new(vec![connection]);
+
+        // Add TLS and SASL auth if credentials provided (for Redpanda Cloud)
+        if let (Some(username), Some(password)) = (&self.config.sasl_username, &self.config.sasl_password) {
+            // Redpanda Cloud requires TLS + SASL/SCRAM-SHA-256
+            builder = builder
+                .tls_config(create_tls_config())
+                .sasl_config(SaslConfig::ScramSha256(Credentials::new(
+                    username.clone(),
+                    password.clone(),
+                )));
+        }
+
+        let client = builder
             .build()
             .await
             .map_err(|e| engine_core::Error::internal(format!("Failed to connect: {}", e)))?;

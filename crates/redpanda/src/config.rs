@@ -1,6 +1,45 @@
 //! Redpanda configuration.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Deserialize brokers as either a comma-separated string or a list.
+fn deserialize_brokers<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::{self, Visitor};
+    use std::fmt;
+
+    struct BrokersVisitor;
+
+    impl<'de> Visitor<'de> for BrokersVisitor {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a comma-separated string or a list of broker addresses")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(value.split(',').map(|s| s.trim().to_string()).collect())
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: de::SeqAccess<'de>,
+        {
+            let mut brokers = Vec::new();
+            while let Some(broker) = seq.next_element::<String>()? {
+                brokers.push(broker);
+            }
+            Ok(brokers)
+        }
+    }
+
+    deserializer.deserialize_any(BrokersVisitor)
+}
 
 /// Consumer configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,8 +96,13 @@ impl Default for ConsumerConfig {
 /// Redpanda producer configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedpandaConfig {
-    /// Broker addresses
+    /// Broker addresses (comma-separated string or list)
+    #[serde(deserialize_with = "deserialize_brokers", default = "default_brokers")]
     pub brokers: Vec<String>,
+    /// SASL username (for cloud authentication)
+    pub sasl_username: Option<String>,
+    /// SASL password (for cloud authentication)
+    pub sasl_password: Option<String>,
     /// Default topic for processed events
     #[serde(default = "default_topic")]
     pub topic: String,
@@ -86,6 +130,10 @@ pub struct RedpandaConfig {
     /// Consumer configuration
     #[serde(default)]
     pub consumer: ConsumerConfig,
+}
+
+fn default_brokers() -> Vec<String> {
+    vec!["localhost:9092".to_string()]
 }
 
 fn default_topic() -> String {
@@ -123,7 +171,9 @@ fn default_acks() -> String {
 impl Default for RedpandaConfig {
     fn default() -> Self {
         Self {
-            brokers: vec!["localhost:9092".to_string()],
+            brokers: default_brokers(),
+            sasl_username: None,
+            sasl_password: None,
             topic: default_topic(),
             batch_size: default_batch_size(),
             batch_timeout_ms: default_batch_timeout_ms(),

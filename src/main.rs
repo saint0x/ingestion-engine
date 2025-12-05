@@ -64,6 +64,12 @@ impl Default for Config {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Install rustls crypto provider BEFORE any TLS operations
+    // rustls 0.23+ requires explicit crypto provider selection
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     // Load .env file if present
     dotenvy::dotenv().ok();
 
@@ -74,6 +80,13 @@ async fn main() -> Result<()> {
 
     // Load configuration
     let config = load_config()?;
+
+    // Debug: log config to verify environment variables are being read
+    info!(
+        brokers = ?config.redpanda.brokers,
+        sasl_username = config.redpanda.sasl_username.as_deref().unwrap_or("none"),
+        "Loaded Redpanda config"
+    );
 
     // Initialize Redpanda producer
     let producer = Arc::new(
@@ -106,6 +119,8 @@ async fn main() -> Result<()> {
         Consumer::new(
             config.redpanda.consumer.clone(),
             config.redpanda.brokers.clone(),
+            config.redpanda.sasl_username.clone(),
+            config.redpanda.sasl_password.clone(),
         )
         .await
         .context("Failed to create Redpanda consumer")?,
@@ -172,15 +187,52 @@ fn load_config() -> Result<Config> {
         // Override with environment variables
         .add_source(
             config::Environment::default()
-                .separator("_")
-                .prefix("INGESTION"),
+                .separator("__")
+                .prefix("INGESTION")
+                .try_parsing(true),
         )
         .build()
         .context("Failed to build configuration")?;
 
-    config
+    let mut config: Config = config
         .try_deserialize()
-        .context("Failed to deserialize configuration")
+        .context("Failed to deserialize configuration")?;
+
+    // Manual overrides for nested Redpanda config from environment
+    // The config crate's nested parsing doesn't work reliably with underscored field names
+    if let Ok(brokers) = std::env::var("INGESTION_REDPANDA_BROKERS") {
+        config.redpanda.brokers = brokers.split(',').map(|s| s.trim().to_string()).collect();
+    }
+    if let Ok(username) = std::env::var("INGESTION_REDPANDA_SASL_USERNAME") {
+        config.redpanda.sasl_username = Some(username);
+    }
+    if let Ok(password) = std::env::var("INGESTION_REDPANDA_SASL_PASSWORD") {
+        config.redpanda.sasl_password = Some(password);
+    }
+    if let Ok(topic) = std::env::var("INGESTION_REDPANDA_TOPIC") {
+        config.redpanda.topic = topic;
+    }
+
+    // Manual overrides for nested ClickHouse config
+    if let Ok(url) = std::env::var("INGESTION_CLICKHOUSE_URL") {
+        config.clickhouse.url = url;
+    }
+    if let Ok(database) = std::env::var("INGESTION_CLICKHOUSE_DATABASE") {
+        config.clickhouse.database = database;
+    }
+    if let Ok(username) = std::env::var("INGESTION_CLICKHOUSE_USERNAME") {
+        config.clickhouse.username = Some(username);
+    }
+    if let Ok(password) = std::env::var("INGESTION_CLICKHOUSE_PASSWORD") {
+        config.clickhouse.password = Some(password);
+    }
+
+    // Auth URL override
+    if let Ok(auth_url) = std::env::var("INGESTION_AUTH_URL") {
+        config.auth_url = auth_url;
+    }
+
+    Ok(config)
 }
 
 /// Check component health on startup.

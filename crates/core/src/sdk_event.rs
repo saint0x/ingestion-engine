@@ -19,6 +19,7 @@ use crate::limits::MAX_CUSTOM_PROPERTIES_BYTES;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
+    // Core analytics events
     Pageview,
     Pageleave,
     Click,
@@ -35,12 +36,33 @@ pub enum EventType {
     SessionEnd,
     Performance,
     Custom,
+
+    // Overwatch Triggers v1.0 - Context-based notification system
+    /// Exit intent detected (mouse moving toward browser chrome)
+    ExitIntent,
+    /// User became idle (no activity for threshold period)
+    IdleStart,
+    /// User resumed activity after being idle
+    IdleEnd,
+    /// Periodic engagement score snapshot
+    EngagementSnapshot,
+    /// A trigger was registered by the SDK
+    TriggerRegistered,
+    /// A trigger condition was met and fired
+    TriggerFired,
+    /// A trigger was dismissed by user or system
+    TriggerDismissed,
+    /// User took action on a triggered notification
+    TriggerAction,
+    /// Error occurred during trigger evaluation or firing
+    TriggerError,
 }
 
 impl EventType {
     /// Returns the string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
+            // Core analytics events
             Self::Pageview => "pageview",
             Self::Pageleave => "pageleave",
             Self::Click => "click",
@@ -57,7 +79,39 @@ impl EventType {
             Self::SessionEnd => "session_end",
             Self::Performance => "performance",
             Self::Custom => "custom",
+
+            // Overwatch Triggers v1.0
+            Self::ExitIntent => "exit_intent",
+            Self::IdleStart => "idle_start",
+            Self::IdleEnd => "idle_end",
+            Self::EngagementSnapshot => "engagement_snapshot",
+            Self::TriggerRegistered => "trigger_registered",
+            Self::TriggerFired => "trigger_fired",
+            Self::TriggerDismissed => "trigger_dismissed",
+            Self::TriggerAction => "trigger_action",
+            Self::TriggerError => "trigger_error",
         }
+    }
+
+    /// Returns true if this is an Overwatch Triggers event type.
+    pub fn is_trigger_event(&self) -> bool {
+        matches!(
+            self,
+            Self::ExitIntent
+                | Self::IdleStart
+                | Self::IdleEnd
+                | Self::EngagementSnapshot
+                | Self::TriggerRegistered
+                | Self::TriggerFired
+                | Self::TriggerDismissed
+                | Self::TriggerAction
+                | Self::TriggerError
+        )
+    }
+
+    /// Returns true if this is a high-volume event type that may need sampling.
+    pub fn is_high_volume(&self) -> bool {
+        matches!(self, Self::MouseMove | Self::EngagementSnapshot)
     }
 }
 
@@ -365,6 +419,85 @@ pub fn validate_sdk_event(event: &SDKEvent) -> Result<()> {
         return Err(Error::validation("timestamp cannot be more than 24h in the past"));
     }
 
+    // Validate trigger event data if applicable
+    if event.event_type.is_trigger_event() {
+        validate_trigger_event_data(event)?;
+    }
+
+    Ok(())
+}
+
+/// Validate trigger-specific event data.
+///
+/// This provides optional type-safe validation for Overwatch Triggers events.
+/// Events with invalid data will be rejected rather than stored with malformed data.
+fn validate_trigger_event_data(event: &SDKEvent) -> Result<()> {
+    use crate::events::*;
+    use validator::Validate;
+
+    // Convert extra fields to JSON value for parsing
+    let data = serde_json::to_value(&event.extra).unwrap_or(Value::Null);
+
+    match event.event_type {
+        EventType::ExitIntent => {
+            if let Ok(exit_data) = serde_json::from_value::<ExitIntentData>(data) {
+                exit_data.validate().map_err(|e| Error::validation(format!("exit_intent data: {}", e)))?;
+            }
+            // Allow events without typed data (backwards compatible)
+        }
+        EventType::IdleStart => {
+            if let Ok(idle_data) = serde_json::from_value::<IdleStartData>(data) {
+                idle_data.validate().map_err(|e| Error::validation(format!("idle_start data: {}", e)))?;
+            }
+        }
+        EventType::IdleEnd => {
+            if let Ok(idle_data) = serde_json::from_value::<IdleEndData>(data) {
+                idle_data.validate().map_err(|e| Error::validation(format!("idle_end data: {}", e)))?;
+            }
+        }
+        EventType::EngagementSnapshot => {
+            if let Ok(engagement_data) = serde_json::from_value::<EngagementSnapshotData>(data) {
+                engagement_data.validate().map_err(|e| Error::validation(format!("engagement_snapshot data: {}", e)))?;
+                // Additional range validation for score
+                if engagement_data.score < 0.0 || engagement_data.score > 100.0 {
+                    return Err(Error::validation("engagement_snapshot score must be 0-100"));
+                }
+            }
+        }
+        EventType::TriggerRegistered => {
+            if let Ok(trigger_data) = serde_json::from_value::<TriggerRegisteredData>(data) {
+                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_registered data: {}", e)))?;
+            }
+        }
+        EventType::TriggerFired => {
+            if let Ok(trigger_data) = serde_json::from_value::<TriggerFiredData>(data) {
+                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_fired data: {}", e)))?;
+            }
+        }
+        EventType::TriggerDismissed => {
+            if let Ok(trigger_data) = serde_json::from_value::<TriggerDismissedData>(data) {
+                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_dismissed data: {}", e)))?;
+            }
+        }
+        EventType::TriggerAction => {
+            if let Ok(trigger_data) = serde_json::from_value::<TriggerActionData>(data) {
+                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_action data: {}", e)))?;
+            }
+        }
+        EventType::TriggerError => {
+            if let Ok(trigger_data) = serde_json::from_value::<TriggerErrorData>(data) {
+                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_error data: {}", e)))?;
+            }
+        }
+        // MouseMove already exists, but validate enhanced fields if present
+        EventType::MouseMove => {
+            if let Ok(mouse_data) = serde_json::from_value::<MouseMoveData>(data) {
+                mouse_data.validate().map_err(|e| Error::validation(format!("mouse_move data: {}", e)))?;
+            }
+        }
+        _ => {}
+    }
+
     Ok(())
 }
 
@@ -463,5 +596,126 @@ mod tests {
         assert_eq!(EventType::Pageview.as_str(), "pageview");
         assert_eq!(EventType::FormSubmit.as_str(), "form_submit");
         assert_eq!(EventType::VisibilityChange.as_str(), "visibility_change");
+    }
+
+    // ==========================================================================
+    // Overwatch Triggers v1.0 Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_trigger_event_types() {
+        // Test new trigger event type string representations
+        assert_eq!(EventType::ExitIntent.as_str(), "exit_intent");
+        assert_eq!(EventType::IdleStart.as_str(), "idle_start");
+        assert_eq!(EventType::IdleEnd.as_str(), "idle_end");
+        assert_eq!(EventType::EngagementSnapshot.as_str(), "engagement_snapshot");
+        assert_eq!(EventType::TriggerRegistered.as_str(), "trigger_registered");
+        assert_eq!(EventType::TriggerFired.as_str(), "trigger_fired");
+        assert_eq!(EventType::TriggerDismissed.as_str(), "trigger_dismissed");
+        assert_eq!(EventType::TriggerAction.as_str(), "trigger_action");
+        assert_eq!(EventType::TriggerError.as_str(), "trigger_error");
+    }
+
+    #[test]
+    fn test_is_trigger_event() {
+        // Trigger events
+        assert!(EventType::ExitIntent.is_trigger_event());
+        assert!(EventType::IdleStart.is_trigger_event());
+        assert!(EventType::IdleEnd.is_trigger_event());
+        assert!(EventType::EngagementSnapshot.is_trigger_event());
+        assert!(EventType::TriggerRegistered.is_trigger_event());
+        assert!(EventType::TriggerFired.is_trigger_event());
+        assert!(EventType::TriggerDismissed.is_trigger_event());
+        assert!(EventType::TriggerAction.is_trigger_event());
+        assert!(EventType::TriggerError.is_trigger_event());
+
+        // Non-trigger events
+        assert!(!EventType::Pageview.is_trigger_event());
+        assert!(!EventType::Click.is_trigger_event());
+        assert!(!EventType::MouseMove.is_trigger_event());
+        assert!(!EventType::Custom.is_trigger_event());
+    }
+
+    #[test]
+    fn test_is_high_volume() {
+        assert!(EventType::MouseMove.is_high_volume());
+        assert!(EventType::EngagementSnapshot.is_high_volume());
+        assert!(!EventType::Pageview.is_high_volume());
+        assert!(!EventType::TriggerFired.is_high_volume());
+    }
+
+    #[test]
+    fn test_parse_exit_intent_event() {
+        let json = r#"{"id":"1","type":"exit_intent","timestamp":1234567890000,"sessionId":"s1","url":"https://example.com","userAgent":"Mozilla","position":{"x":100,"y":0},"velocity":500.0,"timeOnPage":30000,"scrollDepth":75.5}"#;
+        let payload = SDKPayload::parse(json.as_bytes()).unwrap();
+        assert_eq!(payload.events.len(), 1);
+        assert_eq!(payload.events[0].event_type, EventType::ExitIntent);
+    }
+
+    #[test]
+    fn test_parse_idle_start_event() {
+        let json = r#"{"id":"1","type":"idle_start","timestamp":1234567890000,"sessionId":"s1","url":"https://example.com","userAgent":"Mozilla","lastActivityType":"mouse","timeOnPage":60000}"#;
+        let payload = SDKPayload::parse(json.as_bytes()).unwrap();
+        assert_eq!(payload.events.len(), 1);
+        assert_eq!(payload.events[0].event_type, EventType::IdleStart);
+    }
+
+    #[test]
+    fn test_parse_engagement_snapshot_event() {
+        let json = r#"{"id":"1","type":"engagement_snapshot","timestamp":1234567890000,"sessionId":"s1","url":"https://example.com","userAgent":"Mozilla","score":75.5,"factors":{"timeOnPage":30000,"scrollDepth":50.0,"clickCount":5,"formInteraction":true,"mouseActivity":1500.0,"focusTime":25000}}"#;
+        let payload = SDKPayload::parse(json.as_bytes()).unwrap();
+        assert_eq!(payload.events.len(), 1);
+        assert_eq!(payload.events[0].event_type, EventType::EngagementSnapshot);
+    }
+
+    #[test]
+    fn test_parse_trigger_fired_event() {
+        let json = r#"{"id":"1","type":"trigger_fired","timestamp":1234567890000,"sessionId":"s1","url":"https://example.com","userAgent":"Mozilla","triggerId":"promo-banner-1","condition":"scroll_depth>50","priority":100,"context":{"timeOnPage":30000,"scrollDepth":55.0,"engagementScore":70.0,"sessionDuration":120000,"pageCount":3}}"#;
+        let payload = SDKPayload::parse(json.as_bytes()).unwrap();
+        assert_eq!(payload.events.len(), 1);
+        assert_eq!(payload.events[0].event_type, EventType::TriggerFired);
+    }
+
+    #[test]
+    fn test_parse_trigger_action_event() {
+        let json = r#"{"id":"1","type":"trigger_action","timestamp":1234567890000,"sessionId":"s1","url":"https://example.com","userAgent":"Mozilla","triggerId":"promo-banner-1","actionType":"click","data":{"buttonId":"cta-signup"}}"#;
+        let payload = SDKPayload::parse(json.as_bytes()).unwrap();
+        assert_eq!(payload.events.len(), 1);
+        assert_eq!(payload.events[0].event_type, EventType::TriggerAction);
+    }
+
+    #[test]
+    fn test_transform_trigger_event_to_clickhouse() {
+        let mut event = valid_sdk_event();
+        event.event_type = EventType::TriggerFired;
+        event.extra.insert("triggerId".into(), Value::String("test-trigger".into()));
+        event.extra.insert("condition".into(), Value::String("scroll>50".into()));
+        event.extra.insert("priority".into(), Value::Number(100.into()));
+
+        let ch_event = ClickHouseEvent::from_sdk(event, "project-123").unwrap();
+        assert_eq!(ch_event.event_type, "trigger_fired");
+        assert!(ch_event.data.contains("triggerId"));
+        assert!(ch_event.data.contains("test-trigger"));
+    }
+
+    #[test]
+    fn test_serde_roundtrip_all_trigger_types() {
+        let event_types = vec![
+            EventType::ExitIntent,
+            EventType::IdleStart,
+            EventType::IdleEnd,
+            EventType::EngagementSnapshot,
+            EventType::TriggerRegistered,
+            EventType::TriggerFired,
+            EventType::TriggerDismissed,
+            EventType::TriggerAction,
+            EventType::TriggerError,
+        ];
+
+        for event_type in event_types {
+            let json = serde_json::to_string(&event_type).unwrap();
+            let parsed: EventType = serde_json::from_str(&json).unwrap();
+            assert_eq!(event_type, parsed, "Failed roundtrip for {:?}", event_type);
+        }
     }
 }

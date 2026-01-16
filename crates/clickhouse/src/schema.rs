@@ -397,6 +397,7 @@ pub async fn init_schema(client: &ClickHouseClient) -> Result<()> {
 
 /// Event type values for the type column.
 pub mod event_types {
+    // Core analytics events
     pub const PAGEVIEW: &str = "pageview";
     pub const PAGELEAVE: &str = "pageleave";
     pub const CLICK: &str = "click";
@@ -414,8 +415,20 @@ pub mod event_types {
     pub const PERFORMANCE: &str = "performance";
     pub const CUSTOM: &str = "custom";
 
+    // Overwatch Triggers v1.0 - Context-based notification system
+    pub const EXIT_INTENT: &str = "exit_intent";
+    pub const IDLE_START: &str = "idle_start";
+    pub const IDLE_END: &str = "idle_end";
+    pub const ENGAGEMENT_SNAPSHOT: &str = "engagement_snapshot";
+    pub const TRIGGER_REGISTERED: &str = "trigger_registered";
+    pub const TRIGGER_FIRED: &str = "trigger_fired";
+    pub const TRIGGER_DISMISSED: &str = "trigger_dismissed";
+    pub const TRIGGER_ACTION: &str = "trigger_action";
+    pub const TRIGGER_ERROR: &str = "trigger_error";
+
     /// All valid event types.
     pub const ALL: &[&str] = &[
+        // Core analytics
         PAGEVIEW,
         PAGELEAVE,
         CLICK,
@@ -432,5 +445,31 @@ pub mod event_types {
         SESSION_END,
         PERFORMANCE,
         CUSTOM,
+        // Overwatch Triggers
+        EXIT_INTENT,
+        IDLE_START,
+        IDLE_END,
+        ENGAGEMENT_SNAPSHOT,
+        TRIGGER_REGISTERED,
+        TRIGGER_FIRED,
+        TRIGGER_DISMISSED,
+        TRIGGER_ACTION,
+        TRIGGER_ERROR,
     ];
+
+    /// Overwatch Trigger event types only.
+    pub const TRIGGER_EVENTS: &[&str] = &[
+        EXIT_INTENT,
+        IDLE_START,
+        IDLE_END,
+        ENGAGEMENT_SNAPSHOT,
+        TRIGGER_REGISTERED,
+        TRIGGER_FIRED,
+        TRIGGER_DISMISSED,
+        TRIGGER_ACTION,
+        TRIGGER_ERROR,
+    ];
+
+    /// High-volume event types that may need sampling.
+    pub const HIGH_VOLUME: &[&str] = &[MOUSE_MOVE, ENGAGEMENT_SNAPSHOT];
 }

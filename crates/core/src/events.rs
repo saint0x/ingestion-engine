@@ -142,6 +142,249 @@ pub struct CustomData {
     pub properties: serde_json::Value,
 }
 
+// =============================================================================
+// Overwatch Triggers v1.0 - Context-based notification system
+// =============================================================================
+
+/// Position coordinates for mouse tracking.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Position {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Mouse move event data (enhanced for Overwatch Triggers).
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct MouseMoveData {
+    /// Current mouse position
+    pub position: Position,
+    /// Mouse velocity in pixels per second
+    #[validate(range(min = 0.0))]
+    pub velocity: f64,
+    /// Whether exit intent was detected (mouse moving toward browser chrome)
+    #[serde(default)]
+    pub exit_intent: bool,
+    /// CSS selector of element being hovered (if any)
+    #[validate(length(max = 1000))]
+    pub hover_target: Option<String>,
+}
+
+/// Exit intent event data.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct ExitIntentData {
+    /// Mouse position when exit intent was detected
+    pub position: Position,
+    /// Mouse velocity in pixels per second
+    #[validate(range(min = 0.0))]
+    pub velocity: f64,
+    /// Time spent on page in milliseconds
+    #[validate(range(min = 0))]
+    pub time_on_page: i64,
+    /// Current scroll depth percentage (0-100)
+    #[validate(range(min = 0.0, max = 100.0))]
+    pub scroll_depth: f64,
+}
+
+/// Activity type for idle detection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ActivityType {
+    Mouse,
+    Keyboard,
+    Scroll,
+    Click,
+    Touch,
+}
+
+/// Idle start event data.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct IdleStartData {
+    /// Type of last activity before going idle
+    pub last_activity_type: ActivityType,
+    /// Time spent on page in milliseconds
+    #[validate(range(min = 0))]
+    pub time_on_page: i64,
+}
+
+/// Idle end event data.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct IdleEndData {
+    /// Duration of idle period in milliseconds
+    #[validate(range(min = 0))]
+    pub idle_duration: i64,
+    /// Type of activity that ended the idle period
+    pub resume_activity_type: ActivityType,
+    /// Time spent on page in milliseconds
+    #[validate(range(min = 0))]
+    pub time_on_page: i64,
+}
+
+/// Engagement factors for scoring.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct EngagementFactors {
+    /// Time spent on page in milliseconds
+    #[validate(range(min = 0))]
+    pub time_on_page: i64,
+    /// Current scroll depth percentage (0-100)
+    #[validate(range(min = 0.0, max = 100.0))]
+    pub scroll_depth: f64,
+    /// Number of clicks during session
+    #[validate(range(min = 0))]
+    pub click_count: u32,
+    /// Whether user has interacted with a form
+    #[serde(default)]
+    pub form_interaction: bool,
+    /// Total mouse movement in pixels
+    #[validate(range(min = 0.0))]
+    pub mouse_activity: f64,
+    /// Time page has been in focus in milliseconds
+    #[validate(range(min = 0))]
+    pub focus_time: i64,
+}
+
+/// Engagement snapshot event data (periodic).
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct EngagementSnapshotData {
+    /// Computed engagement score (0-100)
+    #[validate(range(min = 0.0, max = 100.0))]
+    pub score: f64,
+    /// Individual factors contributing to score
+    pub factors: EngagementFactors,
+}
+
+/// Trigger fire frequency constraint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TriggerOnce {
+    /// Fire once per page view
+    Page,
+    /// Fire once per session
+    Session,
+    /// Fire once per user (persistent)
+    User,
+    /// No constraint (can fire multiple times)
+    #[serde(rename = "false")]
+    False,
+}
+
+/// Trigger registered event data.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct TriggerRegisteredData {
+    /// Unique identifier for this trigger
+    #[validate(length(min = 1, max = 128))]
+    pub trigger_id: String,
+    /// Serialized condition type (e.g., "scroll_depth>50", "idle_time>30000")
+    #[validate(length(max = 1000))]
+    pub condition: String,
+    /// Priority for trigger ordering (0-1000, higher = more important)
+    #[validate(range(min = 0, max = 1000))]
+    pub priority: u32,
+    /// Fire frequency constraint
+    pub once: TriggerOnce,
+}
+
+/// Trigger context at fire time.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct TriggerContext {
+    /// Time on page when trigger fired (ms)
+    #[validate(range(min = 0))]
+    pub time_on_page: i64,
+    /// Scroll depth when trigger fired (0-100)
+    #[validate(range(min = 0.0, max = 100.0))]
+    pub scroll_depth: f64,
+    /// Engagement score when trigger fired (0-100)
+    #[validate(range(min = 0.0, max = 100.0))]
+    pub engagement_score: f64,
+    /// Total session duration (ms)
+    #[validate(range(min = 0))]
+    pub session_duration: i64,
+    /// Number of pages viewed in session
+    #[validate(range(min = 0))]
+    pub page_count: u32,
+}
+
+/// Trigger fired event data.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct TriggerFiredData {
+    /// Trigger that fired
+    #[validate(length(min = 1, max = 128))]
+    pub trigger_id: String,
+    /// Condition that was met
+    #[validate(length(max = 1000))]
+    pub condition: String,
+    /// Priority of the fired trigger
+    #[validate(range(min = 0, max = 1000))]
+    pub priority: u32,
+    /// Context at the moment of firing
+    pub context: TriggerContext,
+}
+
+/// Dismiss method for triggers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DismissMethod {
+    /// User explicitly dismissed
+    User,
+    /// User snoozed (will reappear later)
+    Snooze,
+    /// System limit reached (too many triggers)
+    Limit,
+}
+
+/// Trigger dismissed event data.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct TriggerDismissedData {
+    /// Trigger that was dismissed
+    #[validate(length(min = 1, max = 128))]
+    pub trigger_id: String,
+    /// How the trigger was dismissed
+    pub method: DismissMethod,
+    /// Snooze duration if method is Snooze (ms)
+    pub snooze_duration: Option<i64>,
+}
+
+/// Trigger action event data.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct TriggerActionData {
+    /// Trigger that received the action
+    #[validate(length(min = 1, max = 128))]
+    pub trigger_id: String,
+    /// Type of action taken (e.g., "click", "submit", "navigate")
+    #[validate(length(min = 1, max = 64))]
+    pub action_type: String,
+    /// Custom developer data associated with the action (max 16KB)
+    #[validate(custom(function = "validate_properties_size"))]
+    pub data: Option<serde_json::Value>,
+}
+
+/// Trigger error type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TriggerErrorType {
+    /// Error evaluating trigger condition
+    ConditionEval,
+    /// Error in fire callback
+    FireCallback,
+    /// Error accessing storage
+    Storage,
+}
+
+/// Trigger error event data.
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct TriggerErrorData {
+    /// Trigger that encountered the error
+    #[validate(length(min = 1, max = 128))]
+    pub trigger_id: String,
+    /// Type of error
+    pub error_type: TriggerErrorType,
+    /// Error message
+    #[validate(length(max = 1000))]
+    pub message: String,
+    /// Optional stack trace
+    #[validate(length(max = 4000))]
+    pub stack: Option<String>,
+}
+
 /// Event payload variants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]

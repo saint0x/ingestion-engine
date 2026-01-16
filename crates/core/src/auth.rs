@@ -278,6 +278,7 @@ mod tests {
             rate_limit: Some(5000),
             allowed_origins: None,
             error: None,
+            mau: None,
         };
         assert_eq!(response.project_id().unwrap(), "proj-123");
         assert_eq!(response.rate_limit_or_default(), 5000);
@@ -295,6 +296,7 @@ mod tests {
                 code: "AUTH_003".into(),
                 message: "Invalid API key".into(),
             }),
+            mau: None,
         };
         assert!(response.project_id().is_err());
     }

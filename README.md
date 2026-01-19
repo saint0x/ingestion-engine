@@ -143,6 +143,18 @@ Accepts event batches from SDK clients.
 
 Returns service health status including Redpanda and ClickHouse connectivity.
 
+## Self-Hosting ClickHouse
+
+For production self-hosting guidance, see [docs/CLICKHOUSE-SELF-HOST.md](docs/CLICKHOUSE-SELF-HOST.md).
+
+Key topics covered:
+- Batch configuration tuning
+- TTL strategy (row-level vs partition-level)
+- ClickHouse configuration tuning
+- Disk management and monitoring
+- Backup and recovery strategy
+- Diagnostic queries playbook
+
 ## Development
 
 ```bash

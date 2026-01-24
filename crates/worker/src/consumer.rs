@@ -209,7 +209,7 @@ impl ConsumerWorker {
         }
 
         // Insert all events into unified events table
-        let events_vec: Vec<ClickHouseEvent> = events.iter().cloned().collect();
+        let events_vec: Vec<ClickHouseEvent> = events.to_vec();
         let count = clickhouse_client::insert::insert_clickhouse_events(&self.clickhouse, events_vec).await?;
 
         Ok(count)

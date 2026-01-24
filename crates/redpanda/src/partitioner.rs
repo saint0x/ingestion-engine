@@ -11,20 +11,15 @@ pub fn partition_hash(key: &str, num_partitions: i32) -> i32 {
 }
 
 /// Partition strategy.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum PartitionStrategy {
     /// Partition by session ID (maintains ordering per session)
+    #[default]
     BySession,
     /// Partition by tenant ID (all tenant events in same partition)
     ByTenant,
     /// Round-robin (no ordering guarantees)
     RoundRobin,
-}
-
-impl Default for PartitionStrategy {
-    fn default() -> Self {
-        Self::BySession
-    }
 }
 
 /// Returns the partition key based on strategy.

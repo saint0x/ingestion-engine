@@ -12,6 +12,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+clickhouse = { workspace = true }
+reqwest = { version = "0.11", features = ["json"] }
 
 woothee = "0.13"
 

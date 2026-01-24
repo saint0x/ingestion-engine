@@ -48,7 +48,6 @@ CREATE TABLE IF NOT EXISTS overwatch.events (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp, event_id)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -90,7 +89,6 @@ CREATE TABLE IF NOT EXISTS overwatch.sessions (
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toYYYYMM(started_at)
 ORDER BY (project_id, session_id)
-TTL toDateTime(started_at) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -119,7 +117,6 @@ CREATE TABLE IF NOT EXISTS overwatch.internal_metrics (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY timestamp
-TTL toDateTime(timestamp) + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -152,7 +149,6 @@ CREATE TABLE IF NOT EXISTS overwatch.pageviews (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -179,7 +175,6 @@ CREATE TABLE IF NOT EXISTS overwatch.clicks (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -196,7 +191,6 @@ CREATE TABLE IF NOT EXISTS overwatch.scroll_events (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -215,7 +209,6 @@ CREATE TABLE IF NOT EXISTS overwatch.mouse_moves (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -233,7 +226,6 @@ CREATE TABLE IF NOT EXISTS overwatch.form_events (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -252,7 +244,6 @@ CREATE TABLE IF NOT EXISTS overwatch.errors (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -272,7 +263,6 @@ CREATE TABLE IF NOT EXISTS overwatch.performance_metrics (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -289,7 +279,6 @@ CREATE TABLE IF NOT EXISTS overwatch.visibility_events (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -308,7 +297,6 @@ CREATE TABLE IF NOT EXISTS overwatch.resource_loads (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -328,7 +316,6 @@ CREATE TABLE IF NOT EXISTS overwatch.geographic (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -345,7 +332,6 @@ CREATE TABLE IF NOT EXISTS overwatch.custom_events (
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, timestamp)
-TTL toDateTime(timestamp) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192
 "#;
 
@@ -379,6 +365,53 @@ pub fn all_tables() -> Vec<&'static str> {
 
 use crate::client::ClickHouseClient;
 use engine_core::Result;
+use tracing::info;
+
+/// Tables that need TTL removed during migration from row-level to partition-level deletion.
+pub const TABLES_WITH_TTL: &[&str] = &[
+    "overwatch.events",
+    "overwatch.sessions",
+    "overwatch.internal_metrics",
+    "overwatch.pageviews",
+    "overwatch.clicks",
+    "overwatch.scroll_events",
+    "overwatch.mouse_moves",
+    "overwatch.form_events",
+    "overwatch.errors",
+    "overwatch.performance_metrics",
+    "overwatch.visibility_events",
+    "overwatch.resource_loads",
+    "overwatch.geographic",
+    "overwatch.custom_events",
+];
+
+/// Remove row-level TTL from existing tables.
+///
+/// Run this migration when upgrading from row-level TTL to partition-level deletion.
+/// This is idempotent - safe to run multiple times.
+pub async fn migrate_remove_ttl(client: &ClickHouseClient) -> Result<()> {
+    for table in TABLES_WITH_TTL {
+        let sql = format!("ALTER TABLE {} REMOVE TTL", table);
+        match client.inner().query(&sql).execute().await {
+            Ok(_) => {
+                info!(table = table, "Removed TTL from table");
+            }
+            Err(e) => {
+                // Table might not have TTL (already migrated) or not exist yet
+                let err_str = e.to_string();
+                if err_str.contains("doesn't have TTL") || err_str.contains("UNKNOWN_TABLE") {
+                    info!(table = table, "Table has no TTL or doesn't exist, skipping");
+                } else {
+                    return Err(engine_core::Error::internal(format!(
+                        "TTL migration error for {}: {}",
+                        table, e
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Initialize the database schema.
 ///

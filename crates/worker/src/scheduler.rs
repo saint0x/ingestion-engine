@@ -10,6 +10,7 @@ use redpanda::Consumer;
 
 use crate::compression::CompressionWorker;
 use crate::consumer::ConsumerWorker;
+use crate::notifications::NotificationWorker;
 use crate::retention::RetentionWorker;
 
 /// Worker scheduler configuration.
@@ -21,6 +22,8 @@ pub struct WorkerConfig {
     pub retention_interval: Duration,
     /// Metrics flush interval
     pub metrics_flush_interval: Duration,
+    /// Notification check interval
+    pub notification_check_interval: Duration,
 }
 
 impl Default for WorkerConfig {
@@ -29,6 +32,7 @@ impl Default for WorkerConfig {
             compression_interval: Duration::from_secs(3600), // 1 hour
             retention_interval: Duration::from_secs(3600),   // 1 hour
             metrics_flush_interval: Duration::from_secs(60), // 1 minute
+            notification_check_interval: Duration::from_secs(60), // 1 minute
         }
     }
 }
@@ -97,6 +101,12 @@ impl WorkerScheduler {
             scheduler.run_metrics_flush().await;
         }));
 
+        // Notification worker
+        let scheduler = self.clone();
+        handles.push(tokio::spawn(async move {
+            scheduler.run_notification_worker().await;
+        }));
+
         info!("Background workers started");
         handles
     }
@@ -129,6 +139,7 @@ impl WorkerScheduler {
 
     async fn run_metrics_flush(&self) {
         use clickhouse_client::insert::insert_metrics;
+        use clickhouse_client::{collect_ops_metrics, log_ops_metrics};
         use telemetry::metrics;
 
         let mut ticker = interval(self.config.metrics_flush_interval);
@@ -136,9 +147,48 @@ impl WorkerScheduler {
         loop {
             ticker.tick().await;
 
+            // Flush application metrics
             let snapshot = metrics().snapshot();
             if let Err(e) = insert_metrics(&self.clickhouse, snapshot).await {
                 error!("Failed to flush metrics: {}", e);
+            }
+
+            // Collect and log ClickHouse operational metrics
+            match collect_ops_metrics(&self.clickhouse).await {
+                Ok(ops_metrics) => {
+                    log_ops_metrics(&ops_metrics);
+                }
+                Err(e) => {
+                    error!("Failed to collect ClickHouse ops metrics: {}", e);
+                }
+            }
+        }
+    }
+
+    async fn run_notification_worker(&self) {
+        use clickhouse_client::collect_ops_metrics;
+
+        let worker = NotificationWorker::from_env();
+        let mut ticker = interval(self.config.notification_check_interval);
+
+        loop {
+            ticker.tick().await;
+
+            // Check application metrics for alerts
+            if let Err(e) = worker.check_and_alert().await {
+                error!("Notification check error: {}", e);
+            }
+
+            // Check ClickHouse ops metrics for alerts
+            match collect_ops_metrics(&self.clickhouse).await {
+                Ok(ops_metrics) => {
+                    if let Err(e) = worker.check_clickhouse_ops(&ops_metrics).await {
+                        error!("ClickHouse ops notification error: {}", e);
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to collect ops metrics for notifications: {}", e);
+                }
             }
         }
     }

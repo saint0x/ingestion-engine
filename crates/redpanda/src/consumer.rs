@@ -291,7 +291,7 @@ mod tests {
         let config = ConsumerConfig::default();
         assert_eq!(config.group_id, "ingestion-engine");
         assert_eq!(config.topic, "events");
-        assert_eq!(config.batch_size, 1000);
+        assert_eq!(config.batch_size, 5000);
         assert_eq!(config.batch_timeout_ms, 1000);
         assert!(!config.auto_commit);
     }

@@ -69,7 +69,7 @@ fn default_group_id() -> String {
 }
 
 fn default_consumer_batch_size() -> usize {
-    1000
+    5000
 }
 
 fn default_consumer_batch_timeout_ms() -> u64 {
@@ -141,11 +141,11 @@ fn default_topic() -> String {
 }
 
 fn default_batch_size() -> usize {
-    1000
+    5000 // Production-optimized to reduce ClickHouse parts creation
 }
 
 fn default_batch_timeout_ms() -> u64 {
-    100
+    500 // Production-optimized to allow more event accumulation
 }
 
 fn default_compression() -> String {

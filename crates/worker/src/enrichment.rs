@@ -46,15 +46,19 @@ impl EnrichmentWorker {
             }
 
             // Device type (woothee categories: pc, smartphone, mobilephone, crawler, appliance, misc)
-            let device_type = match result.category {
-                "pc" => "desktop",
-                "smartphone" => "mobile",
-                "mobilephone" => "mobile",
-                "crawler" => "bot",
-                "appliance" => "other",
-                _ => "unknown",
-            };
-            event.device_type = device_type.to_string();
+            // Only override if SDK didn't provide a valid device_type
+            // SDK-side detection is more accurate for modern iPad/iPhone Safari
+            if event.device_type.is_empty() || event.device_type == "unknown" {
+                let device_type = match result.category {
+                    "pc" => "desktop",
+                    "smartphone" => "mobile",
+                    "mobilephone" => "mobile",
+                    "crawler" => "bot",
+                    "appliance" => "other",
+                    _ => "unknown",
+                };
+                event.device_type = device_type.to_string();
+            }
         }
     }
 

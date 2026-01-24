@@ -7,8 +7,9 @@ auth_url = "mock"
 
 [redpanda]
 brokers = ["localhost:9092"]
-batch_size = 1000
-batch_timeout_ms = 100
+# Production-optimized batch settings (reduces parts creation in ClickHouse)
+batch_size = 5000
+batch_timeout_ms = 500
 compression = "lz4"
 request_timeout_ms = 30000
 retries = 3

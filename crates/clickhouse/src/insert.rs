@@ -214,6 +214,10 @@ pub async fn insert_events(client: &ClickHouseClient, events: Vec<Event>) -> Res
 ///
 /// Maps to the production schema with project_id, LowCardinality fields,
 /// and JSON data blob for extensibility.
+///
+/// NOTE: Field `r#type` uses raw identifier to match ClickHouse column name exactly.
+/// The clickhouse crate's Row derive uses field names directly for binary format,
+/// not serde renames.
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct ClickHouseEventRow {
     pub event_id: String,
@@ -221,7 +225,7 @@ pub struct ClickHouseEventRow {
     pub session_id: String,
     pub user_id: Option<String>,
     #[serde(rename = "type")]
-    pub event_type: String,
+    pub r#type: String,
     pub timestamp: i64, // DateTime64(3) as milliseconds
     pub url: String,
     pub path: String,
@@ -244,7 +248,7 @@ impl From<ClickHouseEvent> for ClickHouseEventRow {
             project_id: event.project_id,
             session_id: event.session_id,
             user_id: event.user_id,
-            event_type: event.event_type,
+            r#type: event.event_type,
             timestamp: event.timestamp,
             url: event.url,
             path: event.path,

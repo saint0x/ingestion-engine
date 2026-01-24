@@ -191,6 +191,7 @@ pub struct FeaturesResponse {
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Features {
+    // Core analytics features
     #[serde(default = "default_true")]
     pub pageviews: bool,
     #[serde(default = "default_true")]
@@ -211,6 +212,20 @@ pub struct Features {
     pub resources: bool,
     #[serde(default)]
     pub location: bool,
+
+    // Overwatch Triggers v1.0 - Context-based notification system
+    /// Enable exit intent detection events
+    #[serde(default = "default_true")]
+    pub exit_intent: bool,
+    /// Enable idle detection events (idle_start, idle_end)
+    #[serde(default = "default_true")]
+    pub idle_detection: bool,
+    /// Enable engagement scoring snapshots
+    #[serde(default = "default_true")]
+    pub engagement_scoring: bool,
+    /// Enable trigger lifecycle events (registered, fired, dismissed, action, error)
+    #[serde(default = "default_true")]
+    pub triggers: bool,
 }
 
 fn default_true() -> bool {
@@ -221,6 +236,7 @@ impl Features {
     /// Check if a given event type is enabled.
     pub fn is_event_enabled(&self, event_type: &str) -> bool {
         match event_type {
+            // Core analytics events
             "pageview" | "pageleave" => self.pageviews,
             "click" => self.clicks,
             "scroll" => self.scrolling,
@@ -230,9 +246,23 @@ impl Features {
             "error" => self.errors,
             "visibility_change" => self.visibility,
             "resource_load" => self.resources,
+
+            // Overwatch Triggers v1.0
+            "exit_intent" => self.exit_intent,
+            "idle_start" | "idle_end" => self.idle_detection,
+            "engagement_snapshot" => self.engagement_scoring,
+            "trigger_registered" | "trigger_fired" | "trigger_dismissed" | "trigger_action" | "trigger_error" => {
+                self.triggers
+            }
+
             // session_start, session_end, custom are always enabled
             _ => true,
         }
+    }
+
+    /// Check if any Overwatch Triggers feature is enabled.
+    pub fn is_triggers_enabled(&self) -> bool {
+        self.exit_intent || self.idle_detection || self.engagement_scoring || self.triggers
     }
 }
 

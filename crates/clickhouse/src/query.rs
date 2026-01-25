@@ -10,6 +10,7 @@ use serde::Deserialize;
 pub struct QueryEventRow {
     pub event_id: String,
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub user_id: Option<String>,
     #[serde(rename = "type")]
@@ -49,7 +50,7 @@ pub async fn query_events(
 ) -> Result<Vec<QueryEventRow>> {
     let rows: Vec<QueryEventRow> = client
         .inner()
-        .query("SELECT event_id, project_id, session_id, user_id, type, url, path FROM overwatch.events WHERE project_id = ? ORDER BY timestamp DESC LIMIT ?")
+        .query("SELECT event_id, project_id, workspace_id, session_id, user_id, type, url, path FROM overwatch.events WHERE project_id = ? ORDER BY timestamp DESC LIMIT ?")
         .bind(project_id)
         .bind(limit)
         .fetch_all()
@@ -62,7 +63,7 @@ pub async fn query_events(
 pub async fn query_all_events(client: &ClickHouseClient, limit: u32) -> Result<Vec<QueryEventRow>> {
     let rows: Vec<QueryEventRow> = client
         .inner()
-        .query("SELECT event_id, project_id, session_id, user_id, type, url, path FROM overwatch.events ORDER BY timestamp DESC LIMIT ?")
+        .query("SELECT event_id, project_id, workspace_id, session_id, user_id, type, url, path FROM overwatch.events ORDER BY timestamp DESC LIMIT ?")
         .bind(limit)
         .fetch_all()
         .await

@@ -91,3 +91,18 @@ pub fn expected_project_id(api_key: &str) -> String {
     // Must match generate_mock_project_id in api/state.rs
     format!("proj-{:016x}", hash)
 }
+
+/// Calculate expected workspace_id from API key (matches AuthClient mock behavior).
+/// The mock implementation uses a hash of the API key to generate a deterministic workspace_id.
+pub fn expected_workspace_id(api_key: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    // Use a different seed to get a different hash (matches generate_mock_workspace_id)
+    "workspace".hash(&mut hasher);
+    api_key.hash(&mut hasher);
+    let hash = hasher.finish();
+    // Must match generate_mock_workspace_id in api/state.rs
+    format!("ws-{:016x}", hash)
+}

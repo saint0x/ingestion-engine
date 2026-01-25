@@ -86,7 +86,7 @@ pub async fn ingest_handler(
     }
 
     // Transform SDK events to ClickHouse format
-    let (ch_events, transform_errors) = transform_batch(payload.events, &auth.project_id)
+    let (ch_events, transform_errors) = transform_batch(payload.events, &auth.project_id, &auth.workspace_id)
         .map_err(|e| {
             error!("Transform failed: {}", e);
             ApiError::internal("Failed to process events")

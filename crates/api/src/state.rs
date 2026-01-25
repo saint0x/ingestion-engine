@@ -118,6 +118,7 @@ impl AuthClient {
         AuthResponse {
             valid: true,
             project_id: Some(generate_mock_project_id(api_key)),
+            workspace_id: Some(generate_mock_workspace_id(api_key)),
             permissions: Some(vec!["read".into(), "write".into()]),
             rate_limit: Some(1000),
             allowed_origins: None,
@@ -177,6 +178,20 @@ fn generate_mock_project_id(api_key: &ParsedApiKey) -> String {
     api_key.as_str().hash(&mut hasher);
     let hash = hasher.finish();
     format!("proj-{:016x}", hash)
+}
+
+/// Generate a deterministic mock workspace ID from the API key.
+/// This is for testing only - in production, the auth service provides this.
+fn generate_mock_workspace_id(api_key: &ParsedApiKey) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    // Use a different seed to get a different hash
+    "workspace".hash(&mut hasher);
+    api_key.as_str().hash(&mut hasher);
+    let hash = hasher.finish();
+    format!("ws-{:016x}", hash)
 }
 
 /// Feature flags response from the auth service.

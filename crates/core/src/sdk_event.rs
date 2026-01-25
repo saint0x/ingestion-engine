@@ -270,6 +270,7 @@ impl SDKPayload {
 pub struct ClickHouseEvent {
     pub event_id: String,
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub user_id: Option<String>,
     #[serde(rename = "type")]
@@ -291,7 +292,7 @@ pub struct ClickHouseEvent {
 
 impl ClickHouseEvent {
     /// Transform SDK event to ClickHouse format.
-    pub fn from_sdk(event: SDKEvent, project_id: &str) -> Result<Self> {
+    pub fn from_sdk(event: SDKEvent, project_id: &str, workspace_id: &str) -> Result<Self> {
         // Convert Unix ms to DateTime
         let timestamp = Utc
             .timestamp_millis_opt(event.timestamp)
@@ -359,6 +360,7 @@ impl ClickHouseEvent {
         Ok(Self {
             event_id: event.id,
             project_id: project_id.to_string(),
+            workspace_id: workspace_id.to_string(),
             session_id: event.session_id,
             user_id: event.user_id,
             event_type: event.event_type.as_str().to_string(),
@@ -505,6 +507,7 @@ fn validate_trigger_event_data(event: &SDKEvent) -> Result<()> {
 pub fn transform_batch(
     events: Vec<SDKEvent>,
     project_id: &str,
+    workspace_id: &str,
 ) -> Result<(Vec<ClickHouseEvent>, Vec<Error>)> {
     let mut transformed = Vec::with_capacity(events.len());
     let mut errors = Vec::new();
@@ -515,7 +518,7 @@ pub fn transform_batch(
             continue;
         }
 
-        match ClickHouseEvent::from_sdk(event, project_id) {
+        match ClickHouseEvent::from_sdk(event, project_id, workspace_id) {
             Ok(ch_event) => transformed.push(ch_event),
             Err(e) => errors.push(Error::validation(format!("event[{}]: {}", i, e))),
         }
@@ -571,8 +574,9 @@ mod tests {
     #[test]
     fn test_transform_to_clickhouse() {
         let event = valid_sdk_event();
-        let ch_event = ClickHouseEvent::from_sdk(event, "project-123").unwrap();
+        let ch_event = ClickHouseEvent::from_sdk(event, "project-123", "workspace-456").unwrap();
         assert_eq!(ch_event.project_id, "project-123");
+        assert_eq!(ch_event.workspace_id, "workspace-456");
         assert_eq!(ch_event.event_type, "pageview");
         assert_eq!(ch_event.device_type, "unknown");
     }
@@ -692,7 +696,9 @@ mod tests {
         event.extra.insert("condition".into(), Value::String("scroll>50".into()));
         event.extra.insert("priority".into(), Value::Number(100.into()));
 
-        let ch_event = ClickHouseEvent::from_sdk(event, "project-123").unwrap();
+        let ch_event = ClickHouseEvent::from_sdk(event, "project-123", "workspace-456").unwrap();
+        assert_eq!(ch_event.project_id, "project-123");
+        assert_eq!(ch_event.workspace_id, "workspace-456");
         assert_eq!(ch_event.event_type, "trigger_fired");
         assert!(ch_event.data.contains("triggerId"));
         assert!(ch_event.data.contains("test-trigger"));

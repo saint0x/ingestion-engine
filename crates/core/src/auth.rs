@@ -121,6 +121,8 @@ pub struct AuthResponse {
     pub valid: bool,
     /// Project ID associated with the key.
     pub project_id: Option<String>,
+    /// Workspace ID for multi-workspace tracking.
+    pub workspace_id: Option<String>,
     /// Granted permissions.
     pub permissions: Option<Vec<String>>,
     /// Rate limit (requests per minute).
@@ -173,6 +175,30 @@ impl AuthResponse {
         self.project_id
             .as_deref()
             .ok_or_else(|| Error::auth(AuthErrorCode::InvalidKey, "Missing project ID in response"))
+    }
+
+    /// Extract workspace ID from auth response.
+    pub fn workspace_id(&self) -> Result<&str> {
+        if !self.valid {
+            let err = self.error.as_ref();
+            let code = err.map(|e| e.code.as_str()).unwrap_or("AUTH_003");
+            let msg = err
+                .map(|e| e.message.as_str())
+                .unwrap_or("Invalid API key");
+
+            return Err(match code {
+                "AUTH_001" => Error::auth(AuthErrorCode::MissingKey, msg),
+                "AUTH_002" => Error::auth(AuthErrorCode::InvalidFormat, msg),
+                "AUTH_003" => Error::auth(AuthErrorCode::InvalidKey, msg),
+                "AUTH_004" => Error::auth(AuthErrorCode::Revoked, msg),
+                "AUTH_005" => Error::auth(AuthErrorCode::InsufficientPermissions, msg),
+                _ => Error::auth(AuthErrorCode::InvalidKey, msg),
+            });
+        }
+
+        self.workspace_id
+            .as_deref()
+            .ok_or_else(|| Error::auth(AuthErrorCode::InvalidKey, "Missing workspace ID in response"))
     }
 
     /// Get rate limit or default.
@@ -274,6 +300,7 @@ mod tests {
         let response = AuthResponse {
             valid: true,
             project_id: Some("proj-123".into()),
+            workspace_id: Some("ws-456".into()),
             permissions: Some(vec!["read".into(), "write".into()]),
             rate_limit: Some(5000),
             allowed_origins: None,
@@ -281,6 +308,7 @@ mod tests {
             mau: None,
         };
         assert_eq!(response.project_id().unwrap(), "proj-123");
+        assert_eq!(response.workspace_id().unwrap(), "ws-456");
         assert_eq!(response.rate_limit_or_default(), 5000);
     }
 
@@ -289,6 +317,7 @@ mod tests {
         let response = AuthResponse {
             valid: false,
             project_id: None,
+            workspace_id: None,
             permissions: None,
             rate_limit: None,
             allowed_origins: None,
@@ -299,5 +328,22 @@ mod tests {
             mau: None,
         };
         assert!(response.project_id().is_err());
+        assert!(response.workspace_id().is_err());
+    }
+
+    #[test]
+    fn test_auth_response_missing_workspace_id() {
+        let response = AuthResponse {
+            valid: true,
+            project_id: Some("proj-123".into()),
+            workspace_id: None,
+            permissions: Some(vec!["read".into(), "write".into()]),
+            rate_limit: Some(5000),
+            allowed_origins: None,
+            error: None,
+            mau: None,
+        };
+        assert_eq!(response.project_id().unwrap(), "proj-123");
+        assert!(response.workspace_id().is_err());
     }
 }

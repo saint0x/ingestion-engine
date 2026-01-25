@@ -81,6 +81,14 @@ async fn test_ingest_array_format_e2e() {
         "All events should have project_id {}",
         expected_project
     );
+
+    // Verify workspace_id matches expected (from mock auth)
+    let expected_workspace = fixtures::expected_workspace_id(&fixtures::test_api_key());
+    assert!(
+        rows.iter().all(|r| r.workspace_id == expected_workspace),
+        "All events should have workspace_id {}",
+        expected_workspace
+    );
 }
 
 /// Full pipeline test: POST /overwatch-ingest → MockProducer → ClickHouse (object format)

@@ -84,6 +84,7 @@ mod tests {
         ClickHouseEvent {
             event_id: "test-123".into(),
             project_id: "proj-1".into(),
+            workspace_id: "ws-1".into(),
             session_id: "sess-1".into(),
             user_id: None,
             event_type: "pageview".into(),

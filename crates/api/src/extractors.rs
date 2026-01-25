@@ -19,6 +19,8 @@ pub struct AuthContext {
     pub api_key: ParsedApiKey,
     /// Project ID from auth response
     pub project_id: String,
+    /// Workspace ID for multi-workspace tracking
+    pub workspace_id: String,
     /// Rate limit (requests per minute)
     pub rate_limit: u32,
     /// Allowed origins for CORS
@@ -47,10 +49,12 @@ impl FromRequestParts<AppState> for AuthContext {
         let auth_response = state.auth_client.validate(&api_key).await?;
 
         let project_id = auth_response.project_id()?.to_string();
+        let workspace_id = auth_response.workspace_id()?.to_string();
 
         Ok(AuthContext {
             api_key,
             project_id,
+            workspace_id,
             rate_limit: auth_response.rate_limit_or_default(),
             allowed_origins: auth_response.allowed_origins.clone(),
         })

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS overwatch.events (
     -- Core identifiers
     event_id String,
     project_id String,
+    workspace_id String,
     session_id String,
     user_id Nullable(String),
 
@@ -47,7 +48,7 @@ CREATE TABLE IF NOT EXISTS overwatch.events (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp, event_id)
+ORDER BY (project_id, workspace_id, timestamp, event_id)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -58,6 +59,7 @@ pub const CREATE_SESSIONS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.sessions (
     session_id String,
     project_id String,
+    workspace_id String,
     user_id Nullable(String),
     started_at DateTime64(3),
     ended_at Nullable(DateTime64(3)),
@@ -88,7 +90,7 @@ CREATE TABLE IF NOT EXISTS overwatch.sessions (
 )
 ENGINE = ReplacingMergeTree(updated_at)
 PARTITION BY toYYYYMM(started_at)
-ORDER BY (project_id, session_id)
+ORDER BY (project_id, workspace_id, session_id)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -124,6 +126,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_PAGEVIEWS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.pageviews (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     -- Location
@@ -148,7 +151,7 @@ CREATE TABLE IF NOT EXISTS overwatch.pageviews (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -156,6 +159,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_CLICKS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.clicks (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     url String,
@@ -174,7 +178,7 @@ CREATE TABLE IF NOT EXISTS overwatch.clicks (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -182,6 +186,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_SCROLL_EVENTS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.scroll_events (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     depth Float64,
@@ -190,7 +195,7 @@ CREATE TABLE IF NOT EXISTS overwatch.scroll_events (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -198,6 +203,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_MOUSE_MOVES_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.mouse_moves (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     x Float64,
@@ -208,7 +214,7 @@ CREATE TABLE IF NOT EXISTS overwatch.mouse_moves (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -216,6 +222,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_FORM_EVENTS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.form_events (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     form_id String,
@@ -225,7 +232,7 @@ CREATE TABLE IF NOT EXISTS overwatch.form_events (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -233,6 +240,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_ERRORS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.errors (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     message String,
@@ -243,7 +251,7 @@ CREATE TABLE IF NOT EXISTS overwatch.errors (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -251,6 +259,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_PERFORMANCE_METRICS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.performance_metrics (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     lcp Nullable(Float64),
@@ -262,7 +271,7 @@ CREATE TABLE IF NOT EXISTS overwatch.performance_metrics (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -270,6 +279,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_VISIBILITY_EVENTS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.visibility_events (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     state LowCardinality(String),
@@ -278,7 +288,7 @@ CREATE TABLE IF NOT EXISTS overwatch.visibility_events (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -286,6 +296,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_RESOURCE_LOADS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.resource_loads (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     resource_url String,
@@ -296,7 +307,7 @@ CREATE TABLE IF NOT EXISTS overwatch.resource_loads (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -304,6 +315,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_GEOGRAPHIC_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.geographic (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     country LowCardinality(String),
@@ -315,7 +327,7 @@ CREATE TABLE IF NOT EXISTS overwatch.geographic (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 
@@ -323,6 +335,7 @@ SETTINGS index_granularity = 8192
 pub const CREATE_CUSTOM_EVENTS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS overwatch.custom_events (
     project_id String,
+    workspace_id String,
     session_id String,
     timestamp DateTime64(3),
     name String,
@@ -331,7 +344,7 @@ CREATE TABLE IF NOT EXISTS overwatch.custom_events (
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (project_id, timestamp)
+ORDER BY (project_id, workspace_id, timestamp)
 SETTINGS index_granularity = 8192
 "#;
 

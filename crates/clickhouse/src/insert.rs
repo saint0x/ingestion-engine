@@ -212,7 +212,7 @@ pub async fn insert_events(client: &ClickHouseClient, events: Vec<Event>) -> Res
 
 /// Row for new ClickHouse events table (overwatch.events).
 ///
-/// Maps to the production schema with project_id, LowCardinality fields,
+/// Maps to the production schema with project_id, workspace_id, LowCardinality fields,
 /// and JSON data blob for extensibility.
 ///
 /// NOTE: Field `r#type` uses raw identifier to match ClickHouse column name exactly.
@@ -222,6 +222,7 @@ pub async fn insert_events(client: &ClickHouseClient, events: Vec<Event>) -> Res
 pub struct ClickHouseEventRow {
     pub event_id: String,
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub user_id: Option<String>,
     #[serde(rename = "type")]
@@ -246,6 +247,7 @@ impl From<ClickHouseEvent> for ClickHouseEventRow {
         Self {
             event_id: event.event_id,
             project_id: event.project_id,
+            workspace_id: event.workspace_id,
             session_id: event.session_id,
             user_id: event.user_id,
             r#type: event.event_type,
@@ -386,6 +388,7 @@ pub async fn insert_metrics(client: &ClickHouseClient, snapshot: MetricsSnapshot
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct PageviewRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     // Location
@@ -413,6 +416,7 @@ pub struct PageviewRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct ClickRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub url: String,
@@ -434,6 +438,7 @@ pub struct ClickRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct ScrollEventRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub depth: f64,
@@ -445,6 +450,7 @@ pub struct ScrollEventRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct MouseMoveRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub x: f64,
@@ -458,6 +464,7 @@ pub struct MouseMoveRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct FormEventRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub form_id: String,
@@ -470,6 +477,7 @@ pub struct FormEventRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct ErrorRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub message: String,
@@ -483,6 +491,7 @@ pub struct ErrorRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct PerformanceMetricRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub lcp: Option<f64>,
@@ -497,6 +506,7 @@ pub struct PerformanceMetricRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct VisibilityEventRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub state: String,
@@ -508,6 +518,7 @@ pub struct VisibilityEventRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct ResourceLoadRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub resource_url: String,
@@ -521,6 +532,7 @@ pub struct ResourceLoadRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct GeographicRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub country: String,
@@ -535,6 +547,7 @@ pub struct GeographicRow {
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct CustomEventRow {
     pub project_id: String,
+    pub workspace_id: String,
     pub session_id: String,
     pub timestamp: i64,
     pub name: String,

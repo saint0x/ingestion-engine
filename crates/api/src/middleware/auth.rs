@@ -1,11 +1,6 @@
 //! Authentication middleware.
 
-use axum::{
-    extract::Request,
-    http::StatusCode,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, http::StatusCode, middleware::Next, response::Response};
 use tracing::warn;
 
 /// Simple API key validation middleware.

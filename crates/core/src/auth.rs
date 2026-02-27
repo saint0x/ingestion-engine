@@ -49,7 +49,10 @@ impl ParsedApiKey {
     /// Format: `owk_(live|test)_[a-zA-Z0-9]{32}`
     pub fn parse(key: &str) -> Result<Self> {
         if key.is_empty() {
-            return Err(Error::auth(AuthErrorCode::MissingKey, "API key is required"));
+            return Err(Error::auth(
+                AuthErrorCode::MissingKey,
+                "API key is required",
+            ));
         }
 
         if !API_KEY_REGEX.is_match(key) {
@@ -156,9 +159,7 @@ impl AuthResponse {
         if !self.valid {
             let err = self.error.as_ref();
             let code = err.map(|e| e.code.as_str()).unwrap_or("AUTH_003");
-            let msg = err
-                .map(|e| e.message.as_str())
-                .unwrap_or("Invalid API key");
+            let msg = err.map(|e| e.message.as_str()).unwrap_or("Invalid API key");
 
             return Err(match code {
                 "AUTH_001" => Error::auth(AuthErrorCode::MissingKey, msg),
@@ -186,7 +187,10 @@ impl AuthResponse {
 /// Checks in order:
 /// 1. `Authorization: Bearer <key>`
 /// 2. `X-API-Key: <key>`
-pub fn extract_api_key(auth_header: Option<&str>, api_key_header: Option<&str>) -> Result<ParsedApiKey> {
+pub fn extract_api_key(
+    auth_header: Option<&str>,
+    api_key_header: Option<&str>,
+) -> Result<ParsedApiKey> {
     // Try Authorization header first
     if let Some(auth) = auth_header {
         if let Some(key) = auth.strip_prefix("Bearer ") {
@@ -199,7 +203,10 @@ pub fn extract_api_key(auth_header: Option<&str>, api_key_header: Option<&str>) 
         return ParsedApiKey::parse(key.trim());
     }
 
-    Err(Error::auth(AuthErrorCode::MissingKey, "API key is required"))
+    Err(Error::auth(
+        AuthErrorCode::MissingKey,
+        "API key is required",
+    ))
 }
 
 #[cfg(test)]
@@ -246,11 +253,7 @@ mod tests {
 
     #[test]
     fn test_extract_x_api_key() {
-        let key = extract_api_key(
-            None,
-            Some("owk_test_ABC123xyz789DEF456ghi012JKL345mn"),
-        )
-        .unwrap();
+        let key = extract_api_key(None, Some("owk_test_ABC123xyz789DEF456ghi012JKL345mn")).unwrap();
         assert!(key.is_test());
     }
 

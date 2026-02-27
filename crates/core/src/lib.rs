@@ -11,7 +11,9 @@ pub mod session;
 pub mod tenant;
 
 pub use auth::*;
-pub use error::{Error, Result, AuthErrorCode, ValidationErrorCode, DbErrorCode, RateLimitErrorCode};
+pub use error::{
+    AuthErrorCode, DbErrorCode, Error, RateLimitErrorCode, Result, ValidationErrorCode,
+};
 pub use events::*;
 pub use retention::*;
 pub use sdk_event::*;

@@ -215,7 +215,11 @@ impl Error {
     }
 
     /// Create a rate limit error.
-    pub fn rate_limit(code: RateLimitErrorCode, msg: impl Into<String>, retry_after: Option<u64>) -> Self {
+    pub fn rate_limit(
+        code: RateLimitErrorCode,
+        msg: impl Into<String>,
+        retry_after: Option<u64>,
+    ) -> Self {
         Self::RateLimit {
             code: code.code(),
             message: msg.into(),

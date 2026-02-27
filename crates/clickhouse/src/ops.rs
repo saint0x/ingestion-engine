@@ -71,7 +71,10 @@ impl ClickHouseOpsMetrics {
 
     /// Get tables with high parts count (> 300).
     pub fn high_parts_tables(&self) -> Vec<&TablePartsInfo> {
-        self.tables.iter().filter(|t| t.active_parts > 300).collect()
+        self.tables
+            .iter()
+            .filter(|t| t.active_parts > 300)
+            .collect()
     }
 
     /// Get disks with high usage (> 85%).

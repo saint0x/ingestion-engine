@@ -114,7 +114,7 @@ pub fn validate_batch(batch: &EventBatch) -> Result<Vec<Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::{PageviewData, EventPayload};
+    use crate::events::{EventPayload, PageviewData};
     use uuid::Uuid;
 
     #[test]

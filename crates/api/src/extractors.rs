@@ -29,17 +29,17 @@ pub struct AuthContext {
 impl FromRequestParts<AppState> for AuthContext {
     type Rejection = ApiError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         // Extract API key from headers
         let auth_header = parts
             .headers
             .get(header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok());
 
-        let api_key_header = parts
-            .headers
-            .get("X-API-Key")
-            .and_then(|h| h.to_str().ok());
+        let api_key_header = parts.headers.get("X-API-Key").and_then(|h| h.to_str().ok());
 
         let api_key = extract_api_key(auth_header, api_key_header)?;
 

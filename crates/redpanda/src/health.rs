@@ -7,9 +7,8 @@ use tracing::{debug, error, info};
 
 /// Creates a TLS configuration for Redpanda Cloud.
 fn create_tls_config() -> Arc<rustls::ClientConfig> {
-    let root_store = rustls::RootCertStore::from_iter(
-        webpki_roots::TLS_SERVER_ROOTS.iter().cloned()
-    );
+    let root_store =
+        rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
     let config = rustls::ClientConfig::builder()
         .with_root_certificates(root_store)
@@ -48,10 +47,7 @@ pub async fn check_connection(config: &RedpandaConfig) -> bool {
             // Try to list topics to verify connection
             match client.list_topics().await {
                 Ok(topics) => {
-                    debug!(
-                        topics = topics.len(),
-                        "Redpanda connection healthy"
-                    );
+                    debug!(topics = topics.len(), "Redpanda connection healthy");
                     true
                 }
                 Err(e) => {

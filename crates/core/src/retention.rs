@@ -16,8 +16,8 @@ impl RetentionTier {
     /// Raw event retention in hours.
     pub fn raw_event_retention_hours(&self) -> u64 {
         match self {
-            Self::Free => 24,           // 24 hours
-            Self::Paid => 90 * 24,      // 90 days
+            Self::Free => 24,             // 24 hours
+            Self::Paid => 90 * 24,        // 90 days
             Self::Enterprise => 365 * 24, // 1 year default, configurable
         }
     }
@@ -25,8 +25,8 @@ impl RetentionTier {
     /// Aggregate retention in hours.
     pub fn aggregate_retention_hours(&self) -> u64 {
         match self {
-            Self::Free => 7 * 24,       // 7 days
-            Self::Paid => 365 * 24,     // 1 year
+            Self::Free => 7 * 24,             // 7 days
+            Self::Paid => 365 * 24,           // 1 year
             Self::Enterprise => 3 * 365 * 24, // 3 years default
         }
     }
@@ -34,8 +34,8 @@ impl RetentionTier {
     /// Hours before compression kicks in.
     pub fn compression_after_hours(&self) -> u64 {
         match self {
-            Self::Free => 24,      // After 24h
-            Self::Paid => 30 * 24, // After 30 days
+            Self::Free => 24,            // After 24h
+            Self::Paid => 30 * 24,       // After 30 days
             Self::Enterprise => 90 * 24, // After 90 days
         }
     }

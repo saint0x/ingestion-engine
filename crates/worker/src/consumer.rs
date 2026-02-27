@@ -46,10 +46,7 @@ pub struct ConsumerWorker {
 
 impl ConsumerWorker {
     /// Creates a new consumer worker.
-    pub fn new(
-        consumer: Arc<Consumer>,
-        clickhouse: Arc<ClickHouseClient>,
-    ) -> Self {
+    pub fn new(consumer: Arc<Consumer>, clickhouse: Arc<ClickHouseClient>) -> Self {
         Self {
             consumer,
             clickhouse,
@@ -156,10 +153,7 @@ impl ConsumerWorker {
     /// Inserts events with retry logic.
     ///
     /// Events are enriched (UA parsing) before insertion, then routed to specialized tables.
-    async fn insert_with_retry(
-        &self,
-        events: Vec<ClickHouseEvent>,
-    ) -> Result<usize> {
+    async fn insert_with_retry(&self, events: Vec<ClickHouseEvent>) -> Result<usize> {
         // Enrich events before insertion
         let mut events = events;
         self.enrichment.enrich_batch(&mut events);
@@ -186,9 +180,8 @@ impl ConsumerWorker {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
-            engine_core::Error::internal("Insert failed with unknown error")
-        }))
+        Err(last_error
+            .unwrap_or_else(|| engine_core::Error::internal("Insert failed with unknown error")))
     }
 
     /// Inserts all events into the unified events table.
@@ -210,7 +203,9 @@ impl ConsumerWorker {
 
         // Insert all events into unified events table
         let events_vec: Vec<ClickHouseEvent> = events.to_vec();
-        let count = clickhouse_client::insert::insert_clickhouse_events(&self.clickhouse, events_vec).await?;
+        let count =
+            clickhouse_client::insert::insert_clickhouse_events(&self.clickhouse, events_vec)
+                .await?;
 
         Ok(count)
     }

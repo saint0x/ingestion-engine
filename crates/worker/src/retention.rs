@@ -86,7 +86,10 @@ impl RetentionWorker {
             "Enforcing metrics table retention"
         );
 
-        if let Err(e) = self.drop_old_partitions(METRICS_TABLE, &metrics_cutoff).await {
+        if let Err(e) = self
+            .drop_old_partitions(METRICS_TABLE, &metrics_cutoff)
+            .await
+        {
             warn!(table = METRICS_TABLE, error = %e, "Failed to enforce metrics retention");
         }
 
@@ -100,7 +103,11 @@ impl RetentionWorker {
         let partitions = self.get_old_partitions(table, cutoff_partition).await?;
 
         if partitions.is_empty() {
-            debug!(table = table, cutoff = cutoff_partition, "No partitions to drop");
+            debug!(
+                table = table,
+                cutoff = cutoff_partition,
+                "No partitions to drop"
+            );
             return Ok(());
         }
 

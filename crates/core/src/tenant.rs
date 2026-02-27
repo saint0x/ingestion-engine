@@ -53,7 +53,8 @@ impl Tenant {
 
     /// Returns the effective rate limit for this tenant.
     pub fn effective_rate_limit(&self) -> u32 {
-        self.rate_limit.unwrap_or_else(|| self.tier.default_rate_limit())
+        self.rate_limit
+            .unwrap_or_else(|| self.tier.default_rate_limit())
     }
 }
 

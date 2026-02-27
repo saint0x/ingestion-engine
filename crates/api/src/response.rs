@@ -32,7 +32,11 @@ impl IngestResponse {
             success: true,
             received,
             timestamp: chrono::Utc::now().timestamp_millis(),
-            errors: if errors.is_empty() { None } else { Some(errors) },
+            errors: if errors.is_empty() {
+                None
+            } else {
+                Some(errors)
+            },
         }
     }
 }
@@ -113,8 +117,7 @@ impl ApiError {
     pub fn validation(code: impl Into<String>, errors: Vec<String>) -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,
-            response: ErrorResponse::new("Validation failed", code)
-                .with_details(errors),
+            response: ErrorResponse::new("Validation failed", code).with_details(errors),
             retry_after: None,
         }
     }
@@ -138,9 +141,12 @@ impl IntoResponse for ApiError {
 impl From<engine_core::Error> for ApiError {
     fn from(err: engine_core::Error) -> Self {
         match &err {
-            engine_core::Error::Auth { code, message, http_status } => {
-                let status = StatusCode::from_u16(*http_status)
-                    .unwrap_or(StatusCode::UNAUTHORIZED);
+            engine_core::Error::Auth {
+                code,
+                message,
+                http_status,
+            } => {
+                let status = StatusCode::from_u16(*http_status).unwrap_or(StatusCode::UNAUTHORIZED);
                 ApiError::with_code(status, *code, message)
             }
             engine_core::Error::ValidationWithCode { code, message, .. } => {
@@ -149,9 +155,11 @@ impl From<engine_core::Error> for ApiError {
             engine_core::Error::Database { code, message, .. } => {
                 ApiError::with_code(StatusCode::INTERNAL_SERVER_ERROR, *code, message)
             }
-            engine_core::Error::RateLimit { message, retry_after, .. } => {
-                ApiError::rate_limited(message, *retry_after)
-            }
+            engine_core::Error::RateLimit {
+                message,
+                retry_after,
+                ..
+            } => ApiError::rate_limited(message, *retry_after),
             engine_core::Error::Validation(msg) => ApiError::bad_request(msg),
             engine_core::Error::Unauthorized(msg) => ApiError::unauthorized("AUTH_003", msg),
             engine_core::Error::RateLimited(msg) => ApiError::rate_limited(msg, None),

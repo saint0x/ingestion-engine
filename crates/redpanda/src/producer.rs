@@ -4,25 +4,24 @@ use crate::batch::{BatchAccumulator, BatchConfig, EventBatch};
 use crate::config::RedpandaConfig;
 use crate::partitioner::{get_partition_key, PartitionStrategy};
 use async_trait::async_trait;
+use chrono::Utc;
 use engine_core::{ClickHouseEvent, Event, Result};
-use telemetry::metrics;
 use rskafka::client::{
     partition::{Compression, UnknownTopicHandling},
     ClientBuilder, Credentials, SaslConfig,
 };
 use rskafka::record::Record;
-use chrono::Utc;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use telemetry::metrics;
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
 /// Creates a TLS configuration for Redpanda Cloud.
 fn create_tls_config() -> Arc<rustls::ClientConfig> {
-    let root_store = rustls::RootCertStore::from_iter(
-        webpki_roots::TLS_SERVER_ROOTS.iter().cloned()
-    );
+    let root_store =
+        rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
     let config = rustls::ClientConfig::builder()
         .with_root_certificates(root_store)
@@ -109,7 +108,9 @@ impl Producer {
         let mut builder = ClientBuilder::new(vec![connection]);
 
         // Add TLS and SASL auth if credentials provided (for Redpanda Cloud)
-        if let (Some(username), Some(password)) = (&self.config.sasl_username, &self.config.sasl_password) {
+        if let (Some(username), Some(password)) =
+            (&self.config.sasl_username, &self.config.sasl_password)
+        {
             // Redpanda Cloud requires TLS + SASL/SCRAM-SHA-256
             builder = builder
                 .tls_config(create_tls_config())
@@ -239,7 +240,10 @@ impl Producer {
                     });
                 }
                 Err(e) => {
-                    errors.push(format!("Failed to serialize event {}: {}", event.event_id, e));
+                    errors.push(format!(
+                        "Failed to serialize event {}: {}",
+                        event.event_id, e
+                    ));
                 }
             }
         }
@@ -266,7 +270,9 @@ impl Producer {
                 metrics().events_sent_to_redpanda.inc_by(sent as u64);
 
                 let elapsed = start.elapsed();
-                metrics().redpanda_latency_ms.observe(elapsed.as_millis() as u64);
+                metrics()
+                    .redpanda_latency_ms
+                    .observe(elapsed.as_millis() as u64);
                 metrics().batches_sent_to_redpanda.inc();
 
                 debug!(
@@ -313,8 +319,7 @@ impl Producer {
                 &event.tenant_id.to_string(),
             );
 
-            let payload = serde_json::to_vec(&event)
-                .map_err(engine_core::Error::Serialization)?;
+            let payload = serde_json::to_vec(&event).map_err(engine_core::Error::Serialization)?;
 
             records.push(Record {
                 key: key.map(|k| k.into_bytes()),

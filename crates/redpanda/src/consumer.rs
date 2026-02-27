@@ -20,9 +20,8 @@ use tracing::{debug, error, info, warn};
 
 /// Creates a TLS configuration for Redpanda Cloud.
 fn create_tls_config() -> Arc<rustls::ClientConfig> {
-    let root_store = rustls::RootCertStore::from_iter(
-        webpki_roots::TLS_SERVER_ROOTS.iter().cloned()
-    );
+    let root_store =
+        rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
     let config = rustls::ClientConfig::builder()
         .with_root_certificates(root_store)
@@ -104,10 +103,9 @@ impl Consumer {
                 )));
         }
 
-        let client = builder
-            .build()
-            .await
-            .map_err(|e| engine_core::Error::internal(format!("Failed to connect to Redpanda: {}", e)))?;
+        let client = builder.build().await.map_err(|e| {
+            engine_core::Error::internal(format!("Failed to connect to Redpanda: {}", e))
+        })?;
 
         let partition_client = client
             .partition_client(
@@ -116,7 +114,9 @@ impl Consumer {
                 UnknownTopicHandling::Error,
             )
             .await
-            .map_err(|e| engine_core::Error::internal(format!("Failed to get partition client: {}", e)))?;
+            .map_err(|e| {
+                engine_core::Error::internal(format!("Failed to get partition client: {}", e))
+            })?;
 
         let partition_client = Arc::new(partition_client);
 
@@ -127,7 +127,9 @@ impl Consumer {
             let offset = partition_client
                 .get_offset(OffsetAt::Latest)
                 .await
-                .map_err(|e| engine_core::Error::internal(format!("Failed to get offset: {}", e)))?;
+                .map_err(|e| {
+                    engine_core::Error::internal(format!("Failed to get offset: {}", e))
+                })?;
 
             self.current_offset.store(offset, Ordering::SeqCst);
             self.initialized.store(true, Ordering::SeqCst);
@@ -164,11 +166,7 @@ impl Consumer {
 
         // Fetch records
         let (records, _watermark) = client
-            .fetch_records(
-                current,
-                1..max_bytes as i32,
-                timeout.as_millis() as i32,
-            )
+            .fetch_records(current, 1..max_bytes as i32, timeout.as_millis() as i32)
             .await
             .map_err(|e| {
                 // Connection error - clear cached client

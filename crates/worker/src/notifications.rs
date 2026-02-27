@@ -163,13 +163,11 @@ impl NotificationWorker {
                     "Retention warning"
                 );
             }
-            Notification::SystemAlert { message, severity } => {
-                match severity.as_str() {
-                    "critical" | "error" => error!(message = message, "System alert"),
-                    "warning" => warn!(message = message, "System alert"),
-                    _ => info!(message = message, "System alert"),
-                }
-            }
+            Notification::SystemAlert { message, severity } => match severity.as_str() {
+                "critical" | "error" => error!(message = message, "System alert"),
+                "warning" => warn!(message = message, "System alert"),
+                _ => info!(message = message, "System alert"),
+            },
             Notification::MergePressure {
                 score,
                 max_parts,

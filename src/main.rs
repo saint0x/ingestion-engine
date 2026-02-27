@@ -76,7 +76,10 @@ async fn main() -> Result<()> {
     // Initialize tracing
     init_tracing_from_env();
 
-    info!("Starting Overwatch Ingestion Engine v{}", env!("CARGO_PKG_VERSION"));
+    info!(
+        "Starting Overwatch Ingestion Engine v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     // Load configuration
     let config = load_config()?;

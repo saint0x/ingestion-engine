@@ -34,15 +34,14 @@ impl TestContext {
         // Create ClickHouse client
         let ch_config = ClickHouseConfig {
             url: containers.clickhouse_url.clone(),
-            database: "overwatch".to_string(),
-            username: Some("default".to_string()),
-            password: None,
+            database: containers.clickhouse_database.clone(),
+            username: containers.clickhouse_username.clone(),
+            password: containers.clickhouse_password.clone(),
             pool_size: 5,
             timeout_secs: 30,
         };
-        let clickhouse = Arc::new(
-            ClickHouseClient::new(ch_config).expect("Failed to create ClickHouse client"),
-        );
+        let clickhouse =
+            Arc::new(ClickHouseClient::new(ch_config).expect("Failed to create ClickHouse client"));
 
         // Initialize schema
         init_schema(&clickhouse)

@@ -242,6 +242,7 @@ impl Features {
             "scroll" => self.scrolling,
             "mouse_move" => self.mouse_move,
             "form_focus" | "form_blur" | "form_submit" | "form_abandon" => self.forms,
+            "keydown" | "keypress" | "keyup" => self.forms,
             "performance" => self.performance,
             "error" => self.errors,
             "visibility_change" => self.visibility,
@@ -251,9 +252,8 @@ impl Features {
             "exit_intent" => self.exit_intent,
             "idle_start" | "idle_end" => self.idle_detection,
             "engagement_snapshot" => self.engagement_scoring,
-            "trigger_registered" | "trigger_fired" | "trigger_dismissed" | "trigger_action" | "trigger_error" => {
-                self.triggers
-            }
+            "trigger_registered" | "trigger_fired" | "trigger_dismissed" | "trigger_action"
+            | "trigger_error" => self.triggers,
 
             // session_start, session_end, custom are always enabled
             _ => true,

@@ -5,26 +5,40 @@ use uuid::Uuid;
 
 /// Generate a valid SDK event JSON with unique IDs.
 pub fn sdk_event(event_type: &str) -> serde_json::Value {
-    serde_json::json!({
+    let mut event = serde_json::json!({
         "id": Uuid::new_v4().to_string(),
         "type": event_type,
         "timestamp": Utc::now().timestamp_millis(),
         "sessionId": Uuid::new_v4().to_string(),
         "url": "https://example.com/test",
         "userAgent": "Mozilla/5.0 (Test)"
-    })
+    });
+
+    if event_type == "custom" {
+        event["name"] = serde_json::Value::String("test_custom_event".to_string());
+        event["properties"] = serde_json::json!({ "source": "integration_test" });
+    }
+
+    event
 }
 
 /// Generate a valid SDK event with a specific session ID.
 pub fn sdk_event_with_session(event_type: &str, session_id: &str) -> serde_json::Value {
-    serde_json::json!({
+    let mut event = serde_json::json!({
         "id": Uuid::new_v4().to_string(),
         "type": event_type,
         "timestamp": Utc::now().timestamp_millis(),
         "sessionId": session_id,
         "url": "https://example.com/test",
         "userAgent": "Mozilla/5.0 (Test)"
-    })
+    });
+
+    if event_type == "custom" {
+        event["name"] = serde_json::Value::String("test_custom_event".to_string());
+        event["properties"] = serde_json::json!({ "source": "integration_test" });
+    }
+
+    event
 }
 
 /// Generate N valid SDK events.
@@ -40,6 +54,12 @@ pub fn sdk_events_of_type(n: usize, event_type: &str) -> Vec<serde_json::Value> 
 /// Generate a valid API key for testing.
 pub fn test_api_key() -> String {
     "owk_test_ABC123xyz789DEF456ghi012JKL345mn".to_string()
+}
+
+/// Generate a unique test API key for test isolation.
+pub fn unique_test_api_key() -> String {
+    let token = Uuid::new_v4().to_string().replace('-', "");
+    format!("owk_test_{}", token)
 }
 
 /// Generate a live API key for testing.
@@ -70,7 +90,7 @@ pub fn single_payload(event: serde_json::Value) -> String {
 pub fn oversized_event() -> serde_json::Value {
     let mut event = sdk_event("custom");
     // 70KB of data exceeds the 64KB limit
-    event["hugeField"] = serde_json::Value::String("x".repeat(70_000));
+    event["properties"] = serde_json::json!({ "hugeField": "x".repeat(70_000) });
     event
 }
 

@@ -10,7 +10,7 @@
 //! Requires Docker to be running for ClickHouse testcontainer.
 
 use axum_test::TestServer;
-use clickhouse_client::{count_all_events, query_all_events, truncate_events};
+use clickhouse_client::{count_events, query_events};
 use integration_tests::{fixtures, setup::TestContext};
 
 /// Full pipeline test: POST /overwatch-ingest → MockProducer → ClickHouse (array format)
@@ -20,8 +20,8 @@ async fn test_ingest_array_format_e2e() {
     let ctx = TestContext::new().await;
     let server = TestServer::new(ctx.router.clone()).expect("Failed to create test server");
 
-    // Ensure clean state
-    truncate_events(&ctx.clickhouse).await.ok();
+    let api_key = fixtures::unique_test_api_key();
+    let expected_project = fixtures::expected_project_id(&api_key);
     ctx.clear_captured();
 
     // Send events via /overwatch-ingest (array format)
@@ -31,7 +31,7 @@ async fn test_ingest_array_format_e2e() {
     let response = server
         .post("/overwatch-ingest")
         .content_type("application/json")
-        .add_header("X-API-Key", &fixtures::test_api_key())
+        .add_header("X-API-Key", &api_key)
         .bytes(payload.into())
         .await;
 
@@ -60,12 +60,12 @@ async fn test_ingest_array_format_e2e() {
     assert_eq!(processed, 5, "Should have processed 5 events");
 
     // Verify data in ClickHouse
-    let count = count_all_events(&ctx.clickhouse)
+    let count = count_events(&ctx.clickhouse, &expected_project)
         .await
         .expect("Count query failed");
     assert_eq!(count, 5, "Expected 5 events in ClickHouse, got {}", count);
 
-    let rows = query_all_events(&ctx.clickhouse, 10)
+    let rows = query_events(&ctx.clickhouse, &expected_project, 10)
         .await
         .expect("Query failed");
     assert_eq!(rows.len(), 5, "Expected 5 rows, got {}", rows.len());
@@ -75,7 +75,6 @@ async fn test_ingest_array_format_e2e() {
     );
 
     // Verify project_id matches expected (from mock auth)
-    let expected_project = fixtures::expected_project_id(&fixtures::test_api_key());
     assert!(
         rows.iter().all(|r| r.project_id == expected_project),
         "All events should have project_id {}",
@@ -90,8 +89,8 @@ async fn test_ingest_object_format_e2e() {
     let ctx = TestContext::new().await;
     let server = TestServer::new(ctx.router.clone()).expect("Failed to create test server");
 
-    // Ensure clean state
-    truncate_events(&ctx.clickhouse).await.ok();
+    let api_key = fixtures::unique_test_api_key();
+    let expected_project = fixtures::expected_project_id(&api_key);
     ctx.clear_captured();
 
     // Send events via /overwatch-ingest (object format with metadata)
@@ -101,7 +100,7 @@ async fn test_ingest_object_format_e2e() {
     let response = server
         .post("/overwatch-ingest")
         .content_type("application/json")
-        .add_header("X-API-Key", &fixtures::test_api_key())
+        .add_header("X-API-Key", &api_key)
         .bytes(payload.into())
         .await;
 
@@ -128,12 +127,12 @@ async fn test_ingest_object_format_e2e() {
         .expect("Failed to process events");
 
     // Verify data in ClickHouse
-    let count = count_all_events(&ctx.clickhouse)
+    let count = count_events(&ctx.clickhouse, &expected_project)
         .await
         .expect("Count query failed");
     assert_eq!(count, 3, "Expected 3 events in ClickHouse, got {}", count);
 
-    let rows = query_all_events(&ctx.clickhouse, 10)
+    let rows = query_events(&ctx.clickhouse, &expected_project, 10)
         .await
         .expect("Query failed");
     assert!(
@@ -149,8 +148,8 @@ async fn test_ingest_single_event_e2e() {
     let ctx = TestContext::new().await;
     let server = TestServer::new(ctx.router.clone()).expect("Failed to create test server");
 
-    // Ensure clean state
-    truncate_events(&ctx.clickhouse).await.ok();
+    let api_key = fixtures::unique_test_api_key();
+    let expected_project = fixtures::expected_project_id(&api_key);
     ctx.clear_captured();
 
     // Send single event via /overwatch-ingest
@@ -160,7 +159,7 @@ async fn test_ingest_single_event_e2e() {
     let response = server
         .post("/overwatch-ingest")
         .content_type("application/json")
-        .add_header("X-API-Key", &fixtures::test_api_key())
+        .add_header("X-API-Key", &api_key)
         .bytes(payload.into())
         .await;
 
@@ -184,12 +183,12 @@ async fn test_ingest_single_event_e2e() {
         .expect("Failed to process events");
 
     // Verify data in ClickHouse
-    let count = count_all_events(&ctx.clickhouse)
+    let count = count_events(&ctx.clickhouse, &expected_project)
         .await
         .expect("Count query failed");
     assert_eq!(count, 1, "Expected 1 event in ClickHouse, got {}", count);
 
-    let rows = query_all_events(&ctx.clickhouse, 10)
+    let rows = query_events(&ctx.clickhouse, &expected_project, 10)
         .await
         .expect("Query failed");
     assert_eq!(rows.len(), 1);
@@ -203,8 +202,8 @@ async fn test_ingest_mixed_event_types_e2e() {
     let ctx = TestContext::new().await;
     let server = TestServer::new(ctx.router.clone()).expect("Failed to create test server");
 
-    // Ensure clean state
-    truncate_events(&ctx.clickhouse).await.ok();
+    let api_key = fixtures::unique_test_api_key();
+    let expected_project = fixtures::expected_project_id(&api_key);
     ctx.clear_captured();
 
     // Create batch with multiple event types
@@ -220,7 +219,7 @@ async fn test_ingest_mixed_event_types_e2e() {
     let response = server
         .post("/overwatch-ingest")
         .content_type("application/json")
-        .add_header("X-API-Key", &fixtures::test_api_key())
+        .add_header("X-API-Key", &api_key)
         .bytes(payload.into())
         .await;
 
@@ -250,7 +249,7 @@ async fn test_ingest_mixed_event_types_e2e() {
         .expect("Failed to process events");
 
     // Verify all event types present in ClickHouse
-    let rows = query_all_events(&ctx.clickhouse, 10)
+    let rows = query_events(&ctx.clickhouse, &expected_project, 10)
         .await
         .expect("Query failed");
     assert_eq!(rows.len(), 5);

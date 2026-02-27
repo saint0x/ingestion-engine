@@ -25,6 +25,9 @@ pub enum EventType {
     Click,
     Scroll,
     MouseMove,
+    Keydown,
+    Keypress,
+    Keyup,
     FormFocus,
     FormBlur,
     FormSubmit,
@@ -68,6 +71,9 @@ impl EventType {
             Self::Click => "click",
             Self::Scroll => "scroll",
             Self::MouseMove => "mouse_move",
+            Self::Keydown => "keydown",
+            Self::Keypress => "keypress",
+            Self::Keyup => "keyup",
             Self::FormFocus => "form_focus",
             Self::FormBlur => "form_blur",
             Self::FormSubmit => "form_submit",
@@ -214,8 +220,8 @@ impl SDKPayload {
     /// 2. Object with events: `{ "events": [...], "metadata": {...} }`
     /// 3. Single event: `{ "id": "...", "type": "...", ... }`
     pub fn parse(bytes: &[u8]) -> Result<Self> {
-        let value: Value =
-            serde_json::from_slice(bytes).map_err(|e| Error::validation(format!("invalid JSON: {}", e)))?;
+        let value: Value = serde_json::from_slice(bytes)
+            .map_err(|e| Error::validation(format!("invalid JSON: {}", e)))?;
 
         match &value {
             // Format 1: Array of events
@@ -274,6 +280,7 @@ pub struct ClickHouseEvent {
     pub user_id: Option<String>,
     #[serde(rename = "type")]
     pub event_type: String,
+    pub custom_name: Option<String>,
     pub timestamp: i64, // DateTime64(3) as milliseconds since epoch
     pub url: String,
     pub path: String,
@@ -356,12 +363,23 @@ impl ClickHouseEvent {
             )));
         }
 
+        let custom_name = if matches!(event.event_type, EventType::Custom) {
+            event
+                .extra
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        } else {
+            None
+        };
+
         Ok(Self {
             event_id: event.id,
             project_id: project_id.to_string(),
             session_id: event.session_id,
             user_id: event.user_id,
             event_type: event.event_type.as_str().to_string(),
+            custom_name,
             timestamp: timestamp.timestamp_millis(),
             url: event.url,
             path,
@@ -413,25 +431,24 @@ pub fn validate_sdk_event(event: &SDKEvent) -> Result<()> {
     let max_past = 24 * 60 * 60 * 1000; // 24 hours
 
     if event.timestamp > now + max_future {
-        return Err(Error::validation("timestamp cannot be more than 5s in the future"));
+        return Err(Error::validation(
+            "timestamp cannot be more than 5s in the future",
+        ));
     }
     if event.timestamp < now - max_past {
-        return Err(Error::validation("timestamp cannot be more than 24h in the past"));
+        return Err(Error::validation(
+            "timestamp cannot be more than 24h in the past",
+        ));
     }
 
-    // Validate trigger event data if applicable
-    if event.event_type.is_trigger_event() {
-        validate_trigger_event_data(event)?;
-    }
+    // Validate event-specific payload shape.
+    validate_event_data(event)?;
 
     Ok(())
 }
 
-/// Validate trigger-specific event data.
-///
-/// This provides optional type-safe validation for Overwatch Triggers events.
-/// Events with invalid data will be rejected rather than stored with malformed data.
-fn validate_trigger_event_data(event: &SDKEvent) -> Result<()> {
+/// Validate event-specific payload shape.
+fn validate_event_data(event: &SDKEvent) -> Result<()> {
     use crate::events::*;
     use validator::Validate;
 
@@ -440,62 +457,118 @@ fn validate_trigger_event_data(event: &SDKEvent) -> Result<()> {
 
     match event.event_type {
         EventType::ExitIntent => {
-            if let Ok(exit_data) = serde_json::from_value::<ExitIntentData>(data) {
-                exit_data.validate().map_err(|e| Error::validation(format!("exit_intent data: {}", e)))?;
-            }
-            // Allow events without typed data (backwards compatible)
+            let exit_data = serde_json::from_value::<ExitIntentData>(data)
+                .map_err(|e| Error::validation(format!("exit_intent data: {}", e)))?;
+            exit_data
+                .validate()
+                .map_err(|e| Error::validation(format!("exit_intent data: {}", e)))?;
         }
         EventType::IdleStart => {
-            if let Ok(idle_data) = serde_json::from_value::<IdleStartData>(data) {
-                idle_data.validate().map_err(|e| Error::validation(format!("idle_start data: {}", e)))?;
-            }
+            let idle_data = serde_json::from_value::<IdleStartData>(data)
+                .map_err(|e| Error::validation(format!("idle_start data: {}", e)))?;
+            idle_data
+                .validate()
+                .map_err(|e| Error::validation(format!("idle_start data: {}", e)))?;
         }
         EventType::IdleEnd => {
-            if let Ok(idle_data) = serde_json::from_value::<IdleEndData>(data) {
-                idle_data.validate().map_err(|e| Error::validation(format!("idle_end data: {}", e)))?;
-            }
+            let idle_data = serde_json::from_value::<IdleEndData>(data)
+                .map_err(|e| Error::validation(format!("idle_end data: {}", e)))?;
+            idle_data
+                .validate()
+                .map_err(|e| Error::validation(format!("idle_end data: {}", e)))?;
         }
         EventType::EngagementSnapshot => {
-            if let Ok(engagement_data) = serde_json::from_value::<EngagementSnapshotData>(data) {
-                engagement_data.validate().map_err(|e| Error::validation(format!("engagement_snapshot data: {}", e)))?;
-                // Additional range validation for score
-                if engagement_data.score < 0.0 || engagement_data.score > 100.0 {
-                    return Err(Error::validation("engagement_snapshot score must be 0-100"));
-                }
+            let engagement_data = serde_json::from_value::<EngagementSnapshotData>(data)
+                .map_err(|e| Error::validation(format!("engagement_snapshot data: {}", e)))?;
+            engagement_data
+                .validate()
+                .map_err(|e| Error::validation(format!("engagement_snapshot data: {}", e)))?;
+            // Additional range validation for score
+            if engagement_data.score < 0.0 || engagement_data.score > 100.0 {
+                return Err(Error::validation("engagement_snapshot score must be 0-100"));
             }
         }
         EventType::TriggerRegistered => {
-            if let Ok(trigger_data) = serde_json::from_value::<TriggerRegisteredData>(data) {
-                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_registered data: {}", e)))?;
-            }
+            let trigger_data = serde_json::from_value::<TriggerRegisteredData>(data)
+                .map_err(|e| Error::validation(format!("trigger_registered data: {}", e)))?;
+            trigger_data
+                .validate()
+                .map_err(|e| Error::validation(format!("trigger_registered data: {}", e)))?;
         }
         EventType::TriggerFired => {
-            if let Ok(trigger_data) = serde_json::from_value::<TriggerFiredData>(data) {
-                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_fired data: {}", e)))?;
-            }
+            let trigger_data = serde_json::from_value::<TriggerFiredData>(data)
+                .map_err(|e| Error::validation(format!("trigger_fired data: {}", e)))?;
+            trigger_data
+                .validate()
+                .map_err(|e| Error::validation(format!("trigger_fired data: {}", e)))?;
         }
         EventType::TriggerDismissed => {
-            if let Ok(trigger_data) = serde_json::from_value::<TriggerDismissedData>(data) {
-                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_dismissed data: {}", e)))?;
-            }
+            let trigger_data = serde_json::from_value::<TriggerDismissedData>(data)
+                .map_err(|e| Error::validation(format!("trigger_dismissed data: {}", e)))?;
+            trigger_data
+                .validate()
+                .map_err(|e| Error::validation(format!("trigger_dismissed data: {}", e)))?;
         }
         EventType::TriggerAction => {
-            if let Ok(trigger_data) = serde_json::from_value::<TriggerActionData>(data) {
-                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_action data: {}", e)))?;
-            }
+            let trigger_data = serde_json::from_value::<TriggerActionData>(data)
+                .map_err(|e| Error::validation(format!("trigger_action data: {}", e)))?;
+            trigger_data
+                .validate()
+                .map_err(|e| Error::validation(format!("trigger_action data: {}", e)))?;
         }
         EventType::TriggerError => {
-            if let Ok(trigger_data) = serde_json::from_value::<TriggerErrorData>(data) {
-                trigger_data.validate().map_err(|e| Error::validation(format!("trigger_error data: {}", e)))?;
-            }
+            let trigger_data = serde_json::from_value::<TriggerErrorData>(data)
+                .map_err(|e| Error::validation(format!("trigger_error data: {}", e)))?;
+            trigger_data
+                .validate()
+                .map_err(|e| Error::validation(format!("trigger_error data: {}", e)))?;
         }
         // MouseMove already exists, but validate enhanced fields if present
         EventType::MouseMove => {
-            if let Ok(mouse_data) = serde_json::from_value::<MouseMoveData>(data) {
-                mouse_data.validate().map_err(|e| Error::validation(format!("mouse_move data: {}", e)))?;
-            }
+            let mouse_data = serde_json::from_value::<MouseMoveData>(data)
+                .map_err(|e| Error::validation(format!("mouse_move data: {}", e)))?;
+            mouse_data
+                .validate()
+                .map_err(|e| Error::validation(format!("mouse_move data: {}", e)))?;
+        }
+        EventType::Custom => {
+            let custom_data: SDKCustomData = serde_json::from_value(data)
+                .map_err(|e| Error::validation(format!("custom data: {}", e)))?;
+            custom_data
+                .validate()
+                .map_err(|e| Error::validation(format!("custom data: {}", e)))?;
+            validate_custom_properties_size(&custom_data.properties)?;
         }
         _ => {}
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+struct SDKCustomData {
+    #[validate(length(min = 1, max = 100))]
+    name: String,
+    #[serde(default)]
+    properties: Value,
+}
+
+fn validate_custom_properties_size(properties: &Value) -> Result<()> {
+    if !properties.is_object() {
+        return Err(Error::validation("custom properties must be a JSON object"));
+    }
+
+    let size = serde_json::to_vec(properties)
+        .map(|v| v.len())
+        .map_err(|e| Error::validation(format!("custom properties invalid JSON: {}", e)))?;
+
+    if size > MAX_CUSTOM_PROPERTIES_BYTES {
+        return Err(Error::validation(format!(
+            "custom properties {}KB exceeds {}KB limit",
+            size / 1024,
+            MAX_CUSTOM_PROPERTIES_BYTES / 1024
+        )));
     }
 
     Ok(())
@@ -596,6 +669,7 @@ mod tests {
         assert_eq!(EventType::Pageview.as_str(), "pageview");
         assert_eq!(EventType::FormSubmit.as_str(), "form_submit");
         assert_eq!(EventType::VisibilityChange.as_str(), "visibility_change");
+        assert_eq!(EventType::Keydown.as_str(), "keydown");
     }
 
     // ==========================================================================
@@ -608,7 +682,10 @@ mod tests {
         assert_eq!(EventType::ExitIntent.as_str(), "exit_intent");
         assert_eq!(EventType::IdleStart.as_str(), "idle_start");
         assert_eq!(EventType::IdleEnd.as_str(), "idle_end");
-        assert_eq!(EventType::EngagementSnapshot.as_str(), "engagement_snapshot");
+        assert_eq!(
+            EventType::EngagementSnapshot.as_str(),
+            "engagement_snapshot"
+        );
         assert_eq!(EventType::TriggerRegistered.as_str(), "trigger_registered");
         assert_eq!(EventType::TriggerFired.as_str(), "trigger_fired");
         assert_eq!(EventType::TriggerDismissed.as_str(), "trigger_dismissed");
@@ -669,6 +746,43 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_keydown_event() {
+        let json = r#"{"id":"1","type":"keydown","timestamp":1234567890000,"sessionId":"s1","url":"https://example.com","userAgent":"Mozilla","key":"Enter","element":"input","formField":"email"}"#;
+        let payload = SDKPayload::parse(json.as_bytes()).unwrap();
+        assert_eq!(payload.events.len(), 1);
+        assert_eq!(payload.events[0].event_type, EventType::Keydown);
+    }
+
+    #[test]
+    fn test_custom_event_requires_name_and_properties_object() {
+        let mut event = valid_sdk_event();
+        event.event_type = EventType::Custom;
+        event.extra = HashMap::new();
+        assert!(validate_sdk_event(&event).is_err());
+
+        let mut event_with_name = valid_sdk_event();
+        event_with_name.event_type = EventType::Custom;
+        event_with_name
+            .extra
+            .insert("name".into(), Value::String("purchase".into()));
+        event_with_name
+            .extra
+            .insert("properties".into(), Value::String("invalid".into()));
+        assert!(validate_sdk_event(&event_with_name).is_err());
+
+        let mut valid_custom = valid_sdk_event();
+        valid_custom.event_type = EventType::Custom;
+        valid_custom
+            .extra
+            .insert("name".into(), Value::String("purchase".into()));
+        valid_custom.extra.insert(
+            "properties".into(),
+            serde_json::json!({ "amount": 99.99, "currency": "USD" }),
+        );
+        assert!(validate_sdk_event(&valid_custom).is_ok());
+    }
+
+    #[test]
     fn test_parse_trigger_fired_event() {
         let json = r#"{"id":"1","type":"trigger_fired","timestamp":1234567890000,"sessionId":"s1","url":"https://example.com","userAgent":"Mozilla","triggerId":"promo-banner-1","condition":"scroll_depth>50","priority":100,"context":{"timeOnPage":30000,"scrollDepth":55.0,"engagementScore":70.0,"sessionDuration":120000,"pageCount":3}}"#;
         let payload = SDKPayload::parse(json.as_bytes()).unwrap();
@@ -688,14 +802,36 @@ mod tests {
     fn test_transform_trigger_event_to_clickhouse() {
         let mut event = valid_sdk_event();
         event.event_type = EventType::TriggerFired;
-        event.extra.insert("triggerId".into(), Value::String("test-trigger".into()));
-        event.extra.insert("condition".into(), Value::String("scroll>50".into()));
-        event.extra.insert("priority".into(), Value::Number(100.into()));
+        event
+            .extra
+            .insert("triggerId".into(), Value::String("test-trigger".into()));
+        event
+            .extra
+            .insert("condition".into(), Value::String("scroll>50".into()));
+        event
+            .extra
+            .insert("priority".into(), Value::Number(100.into()));
 
         let ch_event = ClickHouseEvent::from_sdk(event, "project-123").unwrap();
         assert_eq!(ch_event.event_type, "trigger_fired");
         assert!(ch_event.data.contains("triggerId"));
         assert!(ch_event.data.contains("test-trigger"));
+    }
+
+    #[test]
+    fn test_transform_custom_event_includes_custom_name() {
+        let mut event = valid_sdk_event();
+        event.event_type = EventType::Custom;
+        event
+            .extra
+            .insert("name".into(), Value::String("purchase".into()));
+        event
+            .extra
+            .insert("properties".into(), serde_json::json!({"value": 42}));
+
+        let ch_event = ClickHouseEvent::from_sdk(event, "project-123").unwrap();
+        assert_eq!(ch_event.event_type, "custom");
+        assert_eq!(ch_event.custom_name.as_deref(), Some("purchase"));
     }
 
     #[test]

@@ -186,19 +186,27 @@ pub async fn insert_events(client: &ClickHouseClient, events: Vec<Event>) -> Res
 
     let rows: Vec<EventRow> = events.into_iter().map(EventRow::from).collect();
 
-    let mut insert = client.inner().insert("events")
+    let mut insert = client
+        .inner()
+        .insert("events")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
 
     for row in rows {
-        insert.write(&row).await
+        insert
+            .write(&row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
 
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
 
     let elapsed = start.elapsed();
-    metrics().clickhouse_latency_ms.observe(elapsed.as_millis() as u64);
+    metrics()
+        .clickhouse_latency_ms
+        .observe(elapsed.as_millis() as u64);
     metrics().clickhouse_inserts.inc();
 
     debug!(
@@ -215,17 +223,14 @@ pub async fn insert_events(client: &ClickHouseClient, events: Vec<Event>) -> Res
 /// Maps to the production schema with project_id, LowCardinality fields,
 /// and JSON data blob for extensibility.
 ///
-/// NOTE: Field `r#type` uses raw identifier to match ClickHouse column name exactly.
-/// The clickhouse crate's Row derive uses field names directly for binary format,
-/// not serde renames.
 #[derive(Debug, Clone, Row, Serialize, Deserialize)]
 pub struct ClickHouseEventRow {
     pub event_id: String,
     pub project_id: String,
     pub session_id: String,
     pub user_id: Option<String>,
-    #[serde(rename = "type")]
-    pub r#type: String,
+    pub event_type: String,
+    pub custom_name: Option<String>,
     pub timestamp: i64, // DateTime64(3) as milliseconds
     pub url: String,
     pub path: String,
@@ -248,7 +253,8 @@ impl From<ClickHouseEvent> for ClickHouseEventRow {
             project_id: event.project_id,
             session_id: event.session_id,
             user_id: event.user_id,
-            r#type: event.event_type,
+            event_type: event.event_type,
+            custom_name: event.custom_name,
             timestamp: event.timestamp,
             url: event.url,
             path: event.path,
@@ -284,28 +290,27 @@ pub async fn insert_clickhouse_events(
     let rows: Vec<ClickHouseEventRow> = events.into_iter().map(ClickHouseEventRow::from).collect();
 
     // Insert into overwatch.events table
-    let mut insert = client.inner().insert("overwatch.events")
-        .map_err(|e| {
-            metrics().clickhouse_insert_errors.inc();
-            engine_core::Error::internal(format!("Insert error: {}", e))
-        })?;
+    let mut insert = client.inner().insert("overwatch.events").map_err(|e| {
+        metrics().clickhouse_insert_errors.inc();
+        engine_core::Error::internal(format!("Insert error: {}", e))
+    })?;
 
     for row in &rows {
-        insert.write(row).await
-            .map_err(|e| {
-                metrics().clickhouse_insert_errors.inc();
-                engine_core::Error::internal(format!("Write error: {}", e))
-            })?;
+        insert.write(row).await.map_err(|e| {
+            metrics().clickhouse_insert_errors.inc();
+            engine_core::Error::internal(format!("Write error: {}", e))
+        })?;
     }
 
-    insert.end().await
-        .map_err(|e| {
-            metrics().clickhouse_insert_errors.inc();
-            engine_core::Error::internal(format!("End error: {}", e))
-        })?;
+    insert.end().await.map_err(|e| {
+        metrics().clickhouse_insert_errors.inc();
+        engine_core::Error::internal(format!("End error: {}", e))
+    })?;
 
     let elapsed = start.elapsed();
-    metrics().batch_insert_latency_ms.observe(elapsed.as_millis() as u64);
+    metrics()
+        .batch_insert_latency_ms
+        .observe(elapsed.as_millis() as u64);
     metrics().clickhouse_inserts.inc();
     metrics().events_inserted.inc_by(count as u64);
 
@@ -366,13 +371,19 @@ impl From<MetricsSnapshot> for MetricsRow {
 pub async fn insert_metrics(client: &ClickHouseClient, snapshot: MetricsSnapshot) -> Result<()> {
     let row = MetricsRow::from(snapshot);
 
-    let mut insert = client.inner().insert("internal_metrics")
+    let mut insert = client
+        .inner()
+        .insert("internal_metrics")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
 
-    insert.write(&row).await
+    insert
+        .write(&row)
+        .await
         .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
 
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
 
     Ok(())
@@ -552,13 +563,19 @@ pub async fn insert_pageviews(client: &ClickHouseClient, rows: Vec<PageviewRow>)
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.pageviews")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.pageviews")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
@@ -569,64 +586,97 @@ pub async fn insert_clicks(client: &ClickHouseClient, rows: Vec<ClickRow>) -> Re
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.clicks")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.clicks")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
 
 /// Insert scroll events.
-pub async fn insert_scroll_events(client: &ClickHouseClient, rows: Vec<ScrollEventRow>) -> Result<usize> {
+pub async fn insert_scroll_events(
+    client: &ClickHouseClient,
+    rows: Vec<ScrollEventRow>,
+) -> Result<usize> {
     if rows.is_empty() {
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.scroll_events")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.scroll_events")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
 
 /// Insert mouse move events.
-pub async fn insert_mouse_moves(client: &ClickHouseClient, rows: Vec<MouseMoveRow>) -> Result<usize> {
+pub async fn insert_mouse_moves(
+    client: &ClickHouseClient,
+    rows: Vec<MouseMoveRow>,
+) -> Result<usize> {
     if rows.is_empty() {
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.mouse_moves")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.mouse_moves")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
 
 /// Insert form events.
-pub async fn insert_form_events(client: &ClickHouseClient, rows: Vec<FormEventRow>) -> Result<usize> {
+pub async fn insert_form_events(
+    client: &ClickHouseClient,
+    rows: Vec<FormEventRow>,
+) -> Result<usize> {
     if rows.is_empty() {
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.form_events")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.form_events")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
@@ -637,98 +687,149 @@ pub async fn insert_errors(client: &ClickHouseClient, rows: Vec<ErrorRow>) -> Re
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.errors")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.errors")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
 
 /// Insert performance metric events.
-pub async fn insert_performance_metrics(client: &ClickHouseClient, rows: Vec<PerformanceMetricRow>) -> Result<usize> {
+pub async fn insert_performance_metrics(
+    client: &ClickHouseClient,
+    rows: Vec<PerformanceMetricRow>,
+) -> Result<usize> {
     if rows.is_empty() {
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.performance_metrics")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.performance_metrics")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
 
 /// Insert visibility events.
-pub async fn insert_visibility_events(client: &ClickHouseClient, rows: Vec<VisibilityEventRow>) -> Result<usize> {
+pub async fn insert_visibility_events(
+    client: &ClickHouseClient,
+    rows: Vec<VisibilityEventRow>,
+) -> Result<usize> {
     if rows.is_empty() {
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.visibility_events")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.visibility_events")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
 
 /// Insert resource load events.
-pub async fn insert_resource_loads(client: &ClickHouseClient, rows: Vec<ResourceLoadRow>) -> Result<usize> {
+pub async fn insert_resource_loads(
+    client: &ClickHouseClient,
+    rows: Vec<ResourceLoadRow>,
+) -> Result<usize> {
     if rows.is_empty() {
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.resource_loads")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.resource_loads")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
 
 /// Insert geographic events.
-pub async fn insert_geographic(client: &ClickHouseClient, rows: Vec<GeographicRow>) -> Result<usize> {
+pub async fn insert_geographic(
+    client: &ClickHouseClient,
+    rows: Vec<GeographicRow>,
+) -> Result<usize> {
     if rows.is_empty() {
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.geographic")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.geographic")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }
 
 /// Insert custom events.
-pub async fn insert_custom_events(client: &ClickHouseClient, rows: Vec<CustomEventRow>) -> Result<usize> {
+pub async fn insert_custom_events(
+    client: &ClickHouseClient,
+    rows: Vec<CustomEventRow>,
+) -> Result<usize> {
     if rows.is_empty() {
         return Ok(0);
     }
     let count = rows.len();
-    let mut insert = client.inner().insert("overwatch.custom_events")
+    let mut insert = client
+        .inner()
+        .insert("overwatch.custom_events")
         .map_err(|e| engine_core::Error::internal(format!("Insert error: {}", e)))?;
     for row in &rows {
-        insert.write(row).await
+        insert
+            .write(row)
+            .await
             .map_err(|e| engine_core::Error::internal(format!("Write error: {}", e)))?;
     }
-    insert.end().await
+    insert
+        .end()
+        .await
         .map_err(|e| engine_core::Error::internal(format!("End error: {}", e)))?;
     Ok(count)
 }

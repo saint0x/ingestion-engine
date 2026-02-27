@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS overwatch.events (
     user_id Nullable(String),
 
     -- Event classification
-    type LowCardinality(String),
+    event_type LowCardinality(String),
+    type LowCardinality(String) ALIAS event_type,
+    custom_name Nullable(String),
     timestamp DateTime64(3),
 
     -- Page information
@@ -425,6 +427,30 @@ pub async fn init_schema(client: &ClickHouseClient) -> Result<()> {
             .await
             .map_err(|e| engine_core::Error::internal(format!("Schema init error: {}", e)))?;
     }
+
+    migrate_events_columns(client).await?;
+
+    Ok(())
+}
+
+/// Ensure required columns exist on `overwatch.events` for rolling production upgrades.
+///
+/// This migration is idempotent and safe to run on every startup.
+pub async fn migrate_events_columns(client: &ClickHouseClient) -> Result<()> {
+    let statements = [
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS event_type LowCardinality(String) DEFAULT type AFTER user_id",
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS custom_name Nullable(String) AFTER event_type",
+    ];
+
+    for sql in statements {
+        client
+            .inner()
+            .query(sql)
+            .execute()
+            .await
+            .map_err(|e| engine_core::Error::internal(format!("Events schema migration error: {}", e)))?;
+    }
+
     Ok(())
 }
 
@@ -436,6 +462,9 @@ pub mod event_types {
     pub const CLICK: &str = "click";
     pub const SCROLL: &str = "scroll";
     pub const MOUSE_MOVE: &str = "mouse_move";
+    pub const KEYDOWN: &str = "keydown";
+    pub const KEYPRESS: &str = "keypress";
+    pub const KEYUP: &str = "keyup";
     pub const FORM_FOCUS: &str = "form_focus";
     pub const FORM_BLUR: &str = "form_blur";
     pub const FORM_SUBMIT: &str = "form_submit";
@@ -467,6 +496,9 @@ pub mod event_types {
         CLICK,
         SCROLL,
         MOUSE_MOVE,
+        KEYDOWN,
+        KEYPRESS,
+        KEYUP,
         FORM_FOCUS,
         FORM_BLUR,
         FORM_SUBMIT,

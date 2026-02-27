@@ -14,18 +14,38 @@ use testcontainers::{
 /// Container handle for ClickHouse.
 pub struct TestContainers {
     #[allow(dead_code)]
-    clickhouse: ContainerAsync<GenericImage>,
+    clickhouse: Option<ContainerAsync<GenericImage>>,
     pub clickhouse_url: String,
+    pub clickhouse_database: String,
+    pub clickhouse_username: Option<String>,
+    pub clickhouse_password: Option<String>,
 }
 
 impl TestContainers {
     /// Start ClickHouse container.
     pub async fn start() -> Self {
+        if let Some(url) = std::env::var("OVERWATCH_TEST_CLICKHOUSE_URL")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+        {
+            return Self {
+                clickhouse: None,
+                clickhouse_url: url,
+                clickhouse_database: std::env::var("OVERWATCH_TEST_CLICKHOUSE_DB")
+                    .unwrap_or_else(|_| "overwatch".to_string()),
+                clickhouse_username: std::env::var("OVERWATCH_TEST_CLICKHOUSE_USER").ok(),
+                clickhouse_password: std::env::var("OVERWATCH_TEST_CLICKHOUSE_PASSWORD").ok(),
+            };
+        }
+
         let (clickhouse, clickhouse_url) = start_clickhouse().await;
 
         Self {
-            clickhouse,
+            clickhouse: Some(clickhouse),
             clickhouse_url,
+            clickhouse_database: "overwatch".to_string(),
+            clickhouse_username: Some("default".to_string()),
+            clickhouse_password: None,
         }
     }
 }
@@ -43,10 +63,7 @@ pub async fn start_clickhouse() -> (ContainerAsync<GenericImage>, String) {
         .with_env_var("CLICKHOUSE_USER", "default")
         .with_env_var("CLICKHOUSE_PASSWORD", "");
 
-    let container = image
-        .start()
-        .await
-        .expect("Failed to start ClickHouse");
+    let container = image.start().await.expect("Failed to start ClickHouse");
 
     let port = container.get_host_port_ipv4(8123).await.unwrap();
     let url = format!("http://127.0.0.1:{}", port);

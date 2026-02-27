@@ -86,6 +86,7 @@ mod tests {
             session_id: "sess-123".into(),
             user_id: None,
             event_type: "pageview".into(),
+            custom_name: None,
             timestamp: chrono::Utc::now().timestamp_millis(),
             url: "https://example.com".into(),
             path: "/".into(),

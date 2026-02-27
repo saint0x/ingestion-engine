@@ -87,6 +87,7 @@ mod tests {
             session_id: "sess-1".into(),
             user_id: None,
             event_type: "pageview".into(),
+            custom_name: None,
             timestamp: 1704067200000,
             url: "https://example.com".into(),
             path: "/".into(),
@@ -113,7 +114,11 @@ mod tests {
         enricher.enrich(&mut event);
 
         assert_eq!(event.browser, "Chrome");
-        assert!(event.browser_version.starts_with("120"), "Expected version starting with 120, got {}", event.browser_version);
+        assert!(
+            event.browser_version.starts_with("120"),
+            "Expected version starting with 120, got {}",
+            event.browser_version
+        );
         assert_eq!(event.os, "Mac OSX");
         assert_eq!(event.device_type, "desktop");
     }
@@ -148,14 +153,17 @@ mod tests {
     #[test]
     fn test_firefox_linux() {
         let enricher = EnrichmentWorker::new();
-        let mut event = test_event(
-            "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0"
-        );
+        let mut event =
+            test_event("Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0");
 
         enricher.enrich(&mut event);
 
         assert_eq!(event.browser, "Firefox");
-        assert!(event.browser_version.starts_with("120"), "Expected version starting with 120, got {}", event.browser_version);
+        assert!(
+            event.browser_version.starts_with("120"),
+            "Expected version starting with 120, got {}",
+            event.browser_version
+        );
         assert_eq!(event.os, "Linux");
         assert_eq!(event.device_type, "desktop");
     }
@@ -163,9 +171,8 @@ mod tests {
     #[test]
     fn test_googlebot() {
         let enricher = EnrichmentWorker::new();
-        let mut event = test_event(
-            "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
-        );
+        let mut event =
+            test_event("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)");
 
         enricher.enrich(&mut event);
 
@@ -202,7 +209,9 @@ mod tests {
     fn test_batch_enrichment() {
         let enricher = EnrichmentWorker::new();
         let mut events = vec![
-            test_event("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0"),
+            test_event(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+            ),
             test_event("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1"),
             test_event("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"),
         ];

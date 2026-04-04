@@ -1,0 +1,39 @@
+[project]
+name = "overwatch-ingestion"
+description = "Overwatch ingestion production deployment on Fly via Airstack"
+deploy_mode = "remote"
+
+[[infra.servers]]
+name = "overwatch-ingestion"
+provider = "fly"
+region = "ewr"
+server_type = "shared-cpu-2x"
+ssh_key = "~/.ssh/id_ed25519.pub"
+floating_ip = true
+
+[services.ingestion]
+image = "ghcr.io/saint0x/overwatch-ingestion:latest"
+ports = [8080]
+target_server = "overwatch-ingestion"
+
+[services.ingestion.env]
+INGESTION_HOST = "0.0.0.0"
+INGESTION_PORT = "8080"
+RUST_LOG = "info"
+INGESTION_AUTH_URL = "https://overwatch-daemon.fly.dev"
+INGESTION_REDPANDA_BROKERS = "178.156.182.68:9092"
+INGESTION_REDPANDA_SASL_USERNAME = ""
+INGESTION_REDPANDA_SASL_PASSWORD = ""
+INGESTION_CLICKHOUSE_URL = "http://178.156.241.141:8123"
+INGESTION_CLICKHOUSE_DATABASE = "overwatch"
+INGESTION_CLICKHOUSE_USERNAME = "overwatch"
+INGESTION_CLICKHOUSE_PASSWORD = "overwatchpassword"
+
+[services.ingestion.healthcheck]
+command = ["sh", "-lc", "wget -qO- http://127.0.0.1:8080/health/ready >/dev/null"]
+interval_secs = 10
+retries = 10
+timeout_secs = 5
+
+[providers.profiles]
+fly = "personal"

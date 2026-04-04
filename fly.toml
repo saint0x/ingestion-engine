@@ -7,6 +7,11 @@ primary_region = "ewr"
   INGESTION_HOST = "0.0.0.0"
   INGESTION_PORT = "8080"
   RUST_LOG = "info"
+  INGESTION_AUTH_URL = "https://overwatch-daemon.fly.dev"
+  INGESTION_REDPANDA_BROKERS = "178.156.182.68:9092"
+  INGESTION_CLICKHOUSE_URL = "http://178.156.241.141:8123"
+  INGESTION_CLICKHOUSE_DATABASE = "overwatch"
+  INGESTION_CLICKHOUSE_USERNAME = "overwatch"
 
 [http_service]
   internal_port = 8080

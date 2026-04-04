@@ -243,6 +243,13 @@ pub struct ClickHouseEventRow {
     pub country: String,
     pub region: Option<String>,
     pub city: Option<String>,
+    pub link_id: Option<String>,
+    pub link_slug: Option<String>,
+    pub attribution_source: Option<String>,
+    pub attribution_medium: Option<String>,
+    pub attribution_campaign: Option<String>,
+    pub attribution_term: Option<String>,
+    pub attribution_content: Option<String>,
     pub data: String, // JSON blob
 }
 
@@ -267,6 +274,13 @@ impl From<ClickHouseEvent> for ClickHouseEventRow {
             country: event.country,
             region: event.region,
             city: event.city,
+            link_id: event.link_id,
+            link_slug: event.link_slug,
+            attribution_source: event.attribution_source,
+            attribution_medium: event.attribution_medium,
+            attribution_campaign: event.attribution_campaign,
+            attribution_term: event.attribution_term,
+            attribution_content: event.attribution_content,
             data: event.data,
         }
     }

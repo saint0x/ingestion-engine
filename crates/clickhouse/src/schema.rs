@@ -40,6 +40,13 @@ CREATE TABLE IF NOT EXISTS overwatch.events (
     country LowCardinality(String),
     region Nullable(String),
     city Nullable(String),
+    link_id Nullable(String),
+    link_slug Nullable(String),
+    attribution_source Nullable(String),
+    attribution_medium Nullable(String),
+    attribution_campaign Nullable(String),
+    attribution_term Nullable(String),
+    attribution_content Nullable(String),
 
     -- Extensible JSON data blob for event-specific fields
     data String,
@@ -346,7 +353,7 @@ CREATE DATABASE IF NOT EXISTS overwatch
 pub fn all_tables() -> Vec<&'static str> {
     vec![
         CREATE_DATABASE,
-        // Legacy unified events table (kept for backwards compatibility)
+        // Canonical unified events table
         CREATE_EVENTS_TABLE,
         CREATE_SESSIONS_TABLE,
         CREATE_METRICS_TABLE,
@@ -440,6 +447,13 @@ pub async fn migrate_events_columns(client: &ClickHouseClient) -> Result<()> {
     let statements = [
         "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS event_type LowCardinality(String) DEFAULT type AFTER user_id",
         "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS custom_name Nullable(String) AFTER event_type",
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS link_id Nullable(String) AFTER city",
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS link_slug Nullable(String) AFTER link_id",
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS attribution_source Nullable(String) AFTER link_slug",
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS attribution_medium Nullable(String) AFTER attribution_source",
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS attribution_campaign Nullable(String) AFTER attribution_medium",
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS attribution_term Nullable(String) AFTER attribution_campaign",
+        "ALTER TABLE overwatch.events ADD COLUMN IF NOT EXISTS attribution_content Nullable(String) AFTER attribution_term",
     ];
 
     for sql in statements {

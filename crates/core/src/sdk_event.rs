@@ -124,8 +124,27 @@ impl EventType {
 /// Device information from SDK.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DeviceInfo {
+    pub screen: Option<ScreenInfo>,
+    pub viewport: Option<ViewportInfo>,
     pub device: Option<DeviceDetails>,
     pub browser: Option<BrowserDetails>,
+    pub location: Option<LocationInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScreenInfo {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub avail_width: Option<u32>,
+    pub avail_height: Option<u32>,
+    pub color_depth: Option<u32>,
+    pub pixel_ratio: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ViewportInfo {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -139,14 +158,18 @@ pub struct DeviceDetails {
 pub struct BrowserDetails {
     pub name: Option<String>,
     pub version: Option<String>,
+    pub language: Option<String>,
+    pub timezone: Option<String>,
 }
 
 /// Location information from SDK.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LocationInfo {
     pub country: Option<String>,
+    pub country_code: Option<String>,
     pub region: Option<String>,
     pub city: Option<String>,
+    pub timezone: Option<String>,
 }
 
 /// SDK event as received from client (camelCase).
